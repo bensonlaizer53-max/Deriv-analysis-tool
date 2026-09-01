@@ -25,7 +25,8 @@ import {
   Image as ImageIcon,
   Clock,
   CheckCircle,
-  X
+  X,
+  LayoutDashboard
 } from "lucide-react";
 
 interface UserRecord {
@@ -71,7 +72,7 @@ export default function LizyTradeEnterprise() {
       password: "LizyTrade2026@",
       plan: "LIFETIME UNLIMITED VIP",
       phone: "0752642148",
-      txCode: "FOUNDER-ROOT-MASTER",
+      txCode: "FOUNDER-DIRECT-ROOT",
       role: "ADMIN",
       status: "APPROVED",
     }
@@ -91,7 +92,7 @@ export default function LizyTradeEnterprise() {
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    const saved = localStorage.getItem("lizytrade_v5_users");
+    const saved = localStorage.getItem("lizytrade_v6_users");
     if (saved) {
       try {
         setUsersList(JSON.parse(saved));
@@ -101,10 +102,9 @@ export default function LizyTradeEnterprise() {
 
   const saveUsers = (updated: UserRecord[]) => {
     setUsersList(updated);
-    localStorage.setItem("lizytrade_v5_users", JSON.stringify(updated));
+    localStorage.setItem("lizytrade_v6_users", JSON.stringify(updated));
   };
 
-  // Convert uploaded image to Base64
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -116,17 +116,48 @@ export default function LizyTradeEnterprise() {
     }
   };
 
-  // Step 1: Handle Initial Form
+  // Check if credentials belong to Admin
+  const isAdminCredentials = (mail: string, deriv: string) => {
+    const cMail = mail.trim().toLowerCase();
+    const cDeriv = deriv.trim().toUpperCase();
+    return cMail === "bensonlaizer53@gmail.com" || cDeriv === "ROT91981412";
+  };
+
+  // Step 1: User Registration
   const handleInitialRegister = (e: React.FormEvent) => {
     e.preventDefault();
     if (!fullName || !email || !derivAccountId || !userPassword) {
       alert("Tafadhali jaza taarifa zote za usajili!");
       return;
     }
+
+    // Auto-detect Admin: Skip subscription and grant full admin access
+    if (isAdminCredentials(email, derivAccountId)) {
+      const adminAcc: UserRecord = {
+        id: "admin-root",
+        name: fullName || "Benson Mkaine",
+        email: email.trim().toLowerCase(),
+        derivId: derivAccountId.trim().toUpperCase(),
+        password: userPassword,
+        plan: "LIFETIME UNLIMITED VIP",
+        phone: "0752642148",
+        txCode: "FOUNDER-ROOT",
+        role: "ADMIN",
+        status: "APPROVED",
+      };
+
+      const updated = [adminAcc, ...usersList.filter((u) => u.id !== "admin-root")];
+      saveUsers(updated);
+      setCurrentUser(adminAcc);
+      setCurrentView("DASHBOARD");
+      return;
+    }
+
+    // Regular client moves to Subscription Step
     setCurrentView("SUBSCRIPTION_STEP");
   };
 
-  // Step 2: Finalize Payment & Upload Screenshot
+  // Step 2: Regular Client Payment Submission
   const handleCompleteSubscription = (e: React.FormEvent) => {
     e.preventDefault();
     if (!phoneNumber || !transactionCode) {
@@ -159,12 +190,9 @@ export default function LizyTradeEnterprise() {
     const cleanEmail = email.trim().toLowerCase();
     const cleanDeriv = derivAccountId.trim().toUpperCase();
 
-    // Founder Root Login
-    if (
-      (cleanEmail === "bensonlaizer53@gmail.com" || cleanDeriv === "ROT91981412") &&
-      userPassword === "LizyTrade2026@"
-    ) {
-      const adminAcc = usersList[0];
+    // Founder Direct Login
+    if (isAdminCredentials(cleanEmail, cleanDeriv)) {
+      const adminAcc = usersList.find((u) => u.role === "ADMIN") || usersList[0];
       setCurrentUser(adminAcc);
       setCurrentView("DASHBOARD");
       return;
@@ -191,7 +219,7 @@ export default function LizyTradeEnterprise() {
     setCurrentView("DASHBOARD");
   };
 
-  // Admin Approval Handlers
+  // Admin Actions
   const approveUser = (id: string) => {
     const updated = usersList.map((u) => (u.id === id ? { ...u, status: "APPROVED" as const } : u));
     saveUsers(updated);
@@ -202,7 +230,7 @@ export default function LizyTradeEnterprise() {
     saveUsers(updated);
   };
 
-  // Signals API Fetcher
+  // Fetch Signals
   const fetchSignals = async () => {
     try {
       const res = await fetch(`/api/signals?symbol=${symbol}&ticks=${ticksCount}`);
@@ -235,7 +263,7 @@ export default function LizyTradeEnterprise() {
   };
 
   // ==========================================
-  // 1. AUTH SCREEN (LOGIN / REGISTER)
+  // 1. AUTH SCREEN (LOGIN & REGISTRATION)
   // ==========================================
   if (currentView === "AUTH") {
     return (
@@ -251,31 +279,43 @@ export default function LizyTradeEnterprise() {
 
           <div className="flex bg-[#040817] p-1 rounded-2xl border border-blue-900/40">
             <button
-              onClick={() => setAuthTab("LOGIN")}
-              className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all ${authTab === "LOGIN" ? "bg-blue-600 text-white shadow-lg shadow-blue-600/20" : "text-slate-400 hover:text-white"
-                }`}
-            >
-              Ingia (Login)
-            </button>
-            <button
               onClick={() => setAuthTab("REGISTER")}
               className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all ${authTab === "REGISTER" ? "bg-blue-600 text-white shadow-lg shadow-blue-600/20" : "text-slate-400 hover:text-white"
                 }`}
             >
               Jisajili (Register)
             </button>
+            <button
+              onClick={() => setAuthTab("LOGIN")}
+              className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all ${authTab === "LOGIN" ? "bg-blue-600 text-white shadow-lg shadow-blue-600/20" : "text-slate-400 hover:text-white"
+                }`}
+            >
+              Ingia (Login)
+            </button>
           </div>
 
-          {authTab === "LOGIN" ? (
-            <form onSubmit={handleLogin} className="space-y-4">
+          {authTab === "REGISTER" ? (
+            <form onSubmit={handleInitialRegister} className="space-y-4">
               <div>
-                <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">Email:</label>
+                <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">Jina Kamili:</label>
+                <input
+                  type="text"
+                  required
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  placeholder="Benson Mkaine"
+                  className="w-full bg-[#040817] border border-blue-900/60 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-400"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">Barua Pepe (Email):</label>
                 <input
                   type="email"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="user@example.com"
+                  placeholder="bensonlaizer53@gmail.com"
                   className="w-full bg-[#040817] border border-blue-900/60 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-400 font-mono"
                 />
               </div>
@@ -287,7 +327,53 @@ export default function LizyTradeEnterprise() {
                   required
                   value={derivAccountId}
                   onChange={(e) => setDerivAccountId(e.target.value)}
-                  placeholder="mfano: ROT91981412"
+                  placeholder="ROT91981412"
+                  className="w-full bg-[#040817] border border-blue-900/60 rounded-xl px-4 py-2.5 text-xs text-cyan-300 font-bold uppercase focus:outline-none focus:border-cyan-400 font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">Tengeneza Nenosiri (Password):</label>
+                <input
+                  type="password"
+                  required
+                  value={userPassword}
+                  onChange={(e) => setUserPassword(e.target.value)}
+                  placeholder="Weka password salama"
+                  className="w-full bg-[#040817] border border-blue-900/60 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-400 font-mono"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="w-full bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white font-bold py-3.5 rounded-xl text-xs uppercase tracking-wider transition-all shadow-lg shadow-cyan-500/20 active:scale-[0.98] mt-2 cursor-pointer flex items-center justify-center gap-2"
+              >
+                <span>Endelea / Kamilisha Usajili</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={handleLogin} className="space-y-4">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">Email:</label>
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="bensonlaizer53@gmail.com"
+                  className="w-full bg-[#040817] border border-blue-900/60 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-400 font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">Deriv Account ID:</label>
+                <input
+                  type="text"
+                  required
+                  value={derivAccountId}
+                  onChange={(e) => setDerivAccountId(e.target.value)}
+                  placeholder="ROT91981412"
                   className="w-full bg-[#040817] border border-blue-900/60 rounded-xl px-4 py-2.5 text-xs text-cyan-300 font-bold uppercase focus:outline-none focus:border-cyan-400 font-mono"
                 />
               </div>
@@ -321,64 +407,6 @@ export default function LizyTradeEnterprise() {
                 <span>Ingia Kwenye Dashibodi</span>
               </button>
             </form>
-          ) : (
-            <form onSubmit={handleInitialRegister} className="space-y-4">
-              <div>
-                <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">Jina Kamili:</label>
-                <input
-                  type="text"
-                  required
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  placeholder="Rashid Ally"
-                  className="w-full bg-[#040817] border border-blue-900/60 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-400"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">Barua Pepe (Email):</label>
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="user@example.com"
-                  className="w-full bg-[#040817] border border-blue-900/60 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-400 font-mono"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">Deriv Account ID:</label>
-                <input
-                  type="text"
-                  required
-                  value={derivAccountId}
-                  onChange={(e) => setDerivAccountId(e.target.value)}
-                  placeholder="ROT91981412"
-                  className="w-full bg-[#040817] border border-blue-900/60 rounded-xl px-4 py-2.5 text-xs text-cyan-300 font-bold uppercase focus:outline-none focus:border-cyan-400 font-mono"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">Tengeneza Nenosiri (Password):</label>
-                <input
-                  type="password"
-                  required
-                  value={userPassword}
-                  onChange={(e) => setUserPassword(e.target.value)}
-                  placeholder="Weka password salama"
-                  className="w-full bg-[#040817] border border-blue-900/60 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-400 font-mono"
-                />
-              </div>
-
-              <button
-                type="submit"
-                className="w-full bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white font-bold py-3.5 rounded-xl text-xs uppercase tracking-wider transition-all shadow-lg shadow-cyan-500/20 active:scale-[0.98] mt-2 cursor-pointer flex items-center justify-center gap-2"
-              >
-                <span>Endelea Kwenye Subscription & Malipo</span>
-                <ArrowRight className="w-4 h-4" />
-              </button>
-            </form>
           )}
         </div>
       </div>
@@ -386,7 +414,7 @@ export default function LizyTradeEnterprise() {
   }
 
   // ==========================================
-  // 2. SUBSCRIPTION & PAYMENT SCREEN WITH RECEIPT UPLOAD
+  // 2. REGULAR CLIENT PAYMENT & RECEIPT SCREEN
   // ==========================================
   if (currentView === "SUBSCRIPTION_STEP") {
     return (
@@ -476,7 +504,6 @@ export default function LizyTradeEnterprise() {
               </div>
             </div>
 
-            {/* Receipt Screenshot Upload Box */}
             <div>
               <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">
                 Weka Screenshot ya Meseji ya Malipo (Payment Receipt):
@@ -529,7 +556,7 @@ export default function LizyTradeEnterprise() {
   }
 
   // ==========================================
-  // 3. WAITING FOR APPROVAL SCREEN
+  // 3. WAITING APPROVAL SCREEN (FOR CLIENTS)
   // ==========================================
   if (currentView === "WAITING_APPROVAL") {
     return (
@@ -552,7 +579,7 @@ export default function LizyTradeEnterprise() {
               <span className="text-amber-400 font-bold uppercase">PENDING APPROVAL</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-400">Msaada wa Haraka:</span>
+              <span className="text-slate-400">WhatsApp Support:</span>
               <span className="text-cyan-400 font-bold">0628 940 590</span>
             </div>
           </div>
@@ -579,13 +606,13 @@ export default function LizyTradeEnterprise() {
   }
 
   // ==========================================
-  // 4. ADMIN PANEL (VIEW SCREENSHOTS & APPROVE)
+  // 4. ADMIN APPROVAL PANEL
   // ==========================================
   if (currentView === "ADMIN") {
     return (
       <div className="min-h-screen bg-[#040817] text-slate-100 p-4 md:p-8 font-sans">
         <div className="max-w-6xl mx-auto space-y-6">
-          <div className="flex justify-between items-center pb-4 border-b border-blue-900/40">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center pb-4 border-b border-blue-900/40 gap-4">
             <div>
               <h1 className="text-2xl font-black text-white flex items-center gap-2">
                 <Crown className="w-7 h-7 text-amber-400" />
@@ -593,12 +620,15 @@ export default function LizyTradeEnterprise() {
               </h1>
               <p className="text-xs text-slate-400">Kagua risiti, thibitisha watumiaji na wezesha akaunti zao</p>
             </div>
-            <button
-              onClick={() => setCurrentView("DASHBOARD")}
-              className="bg-blue-600 hover:bg-blue-500 text-xs px-4 py-2.5 rounded-xl font-bold text-white transition-all shadow-lg shadow-blue-600/30"
-            >
-              Rudi Kwenye Dashibodi
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setCurrentView("DASHBOARD")}
+                className="bg-blue-600 hover:bg-blue-500 text-xs px-4 py-2.5 rounded-xl font-bold text-white transition-all shadow-lg shadow-blue-600/30 flex items-center gap-1.5"
+              >
+                <LayoutDashboard className="w-4 h-4" />
+                <span>Nenda Kwenye AI Signals</span>
+              </button>
+            </div>
           </div>
 
           <div className="bg-[#0a1128] border border-blue-900/40 rounded-3xl p-6 space-y-4">
@@ -702,7 +732,7 @@ export default function LizyTradeEnterprise() {
   }
 
   // ==========================================
-  // 5. LIVE TRADING DASHBOARD
+  // 5. LIVE ACTIVE TRADING SIGNALS DASHBOARD
   // ==========================================
   return (
     <div className="min-h-screen bg-[#040817] text-slate-100 p-4 md:p-8 font-sans">
@@ -752,7 +782,7 @@ export default function LizyTradeEnterprise() {
         </div>
       </header>
 
-      {/* Main Grid Content */}
+      {/* Main Grid Area */}
       <main className="max-w-7xl mx-auto mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="space-y-6">
           <div className="bg-[#0a1128] border border-blue-900/40 rounded-3xl p-6 shadow-xl space-y-5">
@@ -859,7 +889,7 @@ export default function LizyTradeEnterprise() {
                     {data?.aiRecommendation?.target || "--"}
                   </span>
                 </div>
-                {data?.aiRecommendation?.target && data.aiRecommendation?.target !== "--" && (
+                {data?.aiRecommendation?.target && data.aiRecommendation.target !== "--" && (
                   <button
                     onClick={() => copyToClipboard(data.aiRecommendation.target.replace("DIGIT ", ""))}
                     className="p-2 bg-blue-600/20 hover:bg-blue-600/40 border border-blue-500/30 text-cyan-300 rounded-xl"

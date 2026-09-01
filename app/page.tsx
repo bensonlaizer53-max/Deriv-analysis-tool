@@ -5,26 +5,27 @@ import {
   Zap,
   ShieldCheck,
   Lock,
-  CheckCircle2,
   Activity,
   BarChart3,
   Sliders,
   Copy,
-  Check,
   RefreshCw,
-  UserCheck,
   CreditCard,
   Volume2,
   VolumeX,
   MessageCircle,
-  PhoneCall,
   Users,
   Code2,
   Eye,
   EyeOff,
   Crown,
   ArrowRight,
-  ArrowLeft
+  ArrowLeft,
+  Upload,
+  Image as ImageIcon,
+  Clock,
+  CheckCircle,
+  X
 } from "lucide-react";
 
 interface UserRecord {
@@ -36,28 +37,31 @@ interface UserRecord {
   plan: string;
   phone: string;
   txCode: string;
+  receiptImage?: string;
   role: "ADMIN" | "USER";
   status: "APPROVED" | "PENDING" | "REJECTED";
 }
 
 export default function LizyTradeEnterprise() {
-  // Views: 'AUTH' | 'SUBSCRIPTION_STEP' | 'DASHBOARD' | 'ADMIN'
-  const [currentView, setCurrentView] = useState<"AUTH" | "SUBSCRIPTION_STEP" | "DASHBOARD" | "ADMIN">("AUTH");
-  const [authTab, setAuthTab] = useState<"LOGIN" | "REGISTER">("LOGIN");
+  // Views: 'AUTH' | 'SUBSCRIPTION_STEP' | 'WAITING_APPROVAL' | 'DASHBOARD' | 'ADMIN'
+  const [currentView, setCurrentView] = useState<"AUTH" | "SUBSCRIPTION_STEP" | "WAITING_APPROVAL" | "DASHBOARD" | "ADMIN">("AUTH");
+  const [authTab, setAuthTab] = useState<"LOGIN" | "REGISTER">("REGISTER");
 
-  // Form Fields
+  // Registration & Auth Fields
   const [fullName, setFullName] = useState("");
-  const [email, setEmail] = useState("bensonlaizer53@gmail.com");
-  const [derivAccountId, setDerivAccountId] = useState("ROT91981412");
-  const [userPassword, setUserPassword] = useState("LizyTrade2026@");
+  const [email, setEmail] = useState("");
+  const [derivAccountId, setDerivAccountId] = useState("");
+  const [userPassword, setUserPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
-  // Payment Step Fields
+  // Subscription & Payment Fields
   const [selectedPlan, setSelectedPlan] = useState<"1_MONTH" | "3_MONTHS" | "LIFETIME">("1_MONTH");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [transactionCode, setTransactionCode] = useState("");
+  const [receiptImage, setReceiptImage] = useState<string>("");
+  const [viewingReceipt, setViewingReceipt] = useState<string | null>(null);
 
-  // Registered Users State
+  // Registered Users Mock Database
   const [usersList, setUsersList] = useState<UserRecord[]>([
     {
       id: "admin-root",
@@ -75,7 +79,7 @@ export default function LizyTradeEnterprise() {
 
   const [currentUser, setCurrentUser] = useState<UserRecord | null>(null);
 
-  // Engine States
+  // Trading Engine States
   const [symbol, setSymbol] = useState("1HZ100V");
   const [ticksCount, setTicksCount] = useState(100);
   const [autoRefresh, setAutoRefresh] = useState(true);
@@ -87,7 +91,7 @@ export default function LizyTradeEnterprise() {
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    const saved = localStorage.getItem("lizytrade_v4_users");
+    const saved = localStorage.getItem("lizytrade_v5_users");
     if (saved) {
       try {
         setUsersList(JSON.parse(saved));
@@ -97,10 +101,22 @@ export default function LizyTradeEnterprise() {
 
   const saveUsers = (updated: UserRecord[]) => {
     setUsersList(updated);
-    localStorage.setItem("lizytrade_v4_users", JSON.stringify(updated));
+    localStorage.setItem("lizytrade_v5_users", JSON.stringify(updated));
   };
 
-  // Step 1: Handle User Registration (moves to Subscription Screen)
+  // Convert uploaded image to Base64
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setReceiptImage(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // Step 1: Handle Initial Form
   const handleInitialRegister = (e: React.FormEvent) => {
     e.preventDefault();
     if (!fullName || !email || !derivAccountId || !userPassword) {
@@ -110,7 +126,7 @@ export default function LizyTradeEnterprise() {
     setCurrentView("SUBSCRIPTION_STEP");
   };
 
-  // Step 2: Finalize Payment Submission
+  // Step 2: Finalize Payment & Upload Screenshot
   const handleCompleteSubscription = (e: React.FormEvent) => {
     e.preventDefault();
     if (!phoneNumber || !transactionCode) {
@@ -127,15 +143,14 @@ export default function LizyTradeEnterprise() {
       plan: selectedPlan === "1_MONTH" ? "1 MONTH PRO (Tsh 50,000)" : selectedPlan === "3_MONTHS" ? "3 MONTHS VIP (Tsh 120,000)" : "LIFETIME UNLIMITED (Tsh 250,000)",
       phone: phoneNumber,
       txCode: transactionCode,
+      receiptImage: receiptImage || undefined,
       role: "USER",
       status: "PENDING",
     };
 
     const updated = [...usersList, newUser];
     saveUsers(updated);
-    alert("Usajili na malipo vimewasilishwa! Wasiliana na Admin kupitia WhatsApp (0628 940 590) ili kuidhinishwa.");
-    setAuthTab("LOGIN");
-    setCurrentView("AUTH");
+    setCurrentView("WAITING_APPROVAL");
   };
 
   // Handle Login
@@ -144,7 +159,7 @@ export default function LizyTradeEnterprise() {
     const cleanEmail = email.trim().toLowerCase();
     const cleanDeriv = derivAccountId.trim().toUpperCase();
 
-    // Founder direct login
+    // Founder Root Login
     if (
       (cleanEmail === "bensonlaizer53@gmail.com" || cleanDeriv === "ROT91981412") &&
       userPassword === "LizyTrade2026@"
@@ -163,12 +178,12 @@ export default function LizyTradeEnterprise() {
     );
 
     if (!user) {
-      alert("Taarifa si sahihi! Hakikisha Email, Deriv Account ID na Password viko sahihi.");
+      alert("Taarifa si sahihi! Hakikisha Email, Deriv Account ID na Nenosiri viko sahihi.");
       return;
     }
 
     if (user.status !== "APPROVED") {
-      alert("Akaunti yako ipo 'PENDING APPROVAL'. Tafadhali subiri Admin athibitishe malipo yako au tuma ujumbe WhatsApp.");
+      setCurrentView("WAITING_APPROVAL");
       return;
     }
 
@@ -176,7 +191,7 @@ export default function LizyTradeEnterprise() {
     setCurrentView("DASHBOARD");
   };
 
-  // Admin approvals
+  // Admin Approval Handlers
   const approveUser = (id: string) => {
     const updated = usersList.map((u) => (u.id === id ? { ...u, status: "APPROVED" as const } : u));
     saveUsers(updated);
@@ -187,7 +202,7 @@ export default function LizyTradeEnterprise() {
     saveUsers(updated);
   };
 
-  // Signal Engine Fetch
+  // Signals API Fetcher
   const fetchSignals = async () => {
     try {
       const res = await fetch(`/api/signals?symbol=${symbol}&ticks=${ticksCount}`);
@@ -220,7 +235,7 @@ export default function LizyTradeEnterprise() {
   };
 
   // ==========================================
-  // 1. AUTH SCREEN (LOGIN & INITIAL REGISTER)
+  // 1. AUTH SCREEN (LOGIN / REGISTER)
   // ==========================================
   if (currentView === "AUTH") {
     return (
@@ -260,7 +275,7 @@ export default function LizyTradeEnterprise() {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="bensonlaizer53@gmail.com"
+                  placeholder="user@example.com"
                   className="w-full bg-[#040817] border border-blue-900/60 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-400 font-mono"
                 />
               </div>
@@ -272,7 +287,7 @@ export default function LizyTradeEnterprise() {
                   required
                   value={derivAccountId}
                   onChange={(e) => setDerivAccountId(e.target.value)}
-                  placeholder="mfano: ROT91981412 au CR..."
+                  placeholder="mfano: ROT91981412"
                   className="w-full bg-[#040817] border border-blue-900/60 rounded-xl px-4 py-2.5 text-xs text-cyan-300 font-bold uppercase focus:outline-none focus:border-cyan-400 font-mono"
                 />
               </div>
@@ -327,7 +342,7 @@ export default function LizyTradeEnterprise() {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="rashid@example.com"
+                  placeholder="user@example.com"
                   className="w-full bg-[#040817] border border-blue-900/60 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-400 font-mono"
                 />
               </div>
@@ -339,7 +354,7 @@ export default function LizyTradeEnterprise() {
                   required
                   value={derivAccountId}
                   onChange={(e) => setDerivAccountId(e.target.value)}
-                  placeholder="mfano: ROT91981412 au CR..."
+                  placeholder="ROT91981412"
                   className="w-full bg-[#040817] border border-blue-900/60 rounded-xl px-4 py-2.5 text-xs text-cyan-300 font-bold uppercase focus:outline-none focus:border-cyan-400 font-mono"
                 />
               </div>
@@ -371,7 +386,7 @@ export default function LizyTradeEnterprise() {
   }
 
   // ==========================================
-  // 2. SUBSCRIPTION & PAYMENT SELECTION SCREEN
+  // 2. SUBSCRIPTION & PAYMENT SCREEN WITH RECEIPT UPLOAD
   // ==========================================
   if (currentView === "SUBSCRIPTION_STEP") {
     return (
@@ -384,12 +399,12 @@ export default function LizyTradeEnterprise() {
             >
               <ArrowLeft className="w-4 h-4" /> Rudi Nyuma
             </button>
-            <span className="text-xs font-bold text-cyan-400 uppercase tracking-wider">Hatua ya 2/2: Malipo</span>
+            <span className="text-xs font-bold text-cyan-400 uppercase tracking-wider">Hatua ya 2/2: Malipo & Risiti</span>
           </div>
 
           <div>
-            <h2 className="text-lg font-black text-white">Chagua Kifurushi cha Subscription</h2>
-            <p className="text-xs text-slate-400">Lipia kifurushi ili uwezeshwe kupokea AI signals na kuunganisha na bots zako.</p>
+            <h2 className="text-lg font-black text-white">Chagua Kifurushi & Weka Ushahidi wa Malipo</h2>
+            <p className="text-xs text-slate-400">Lipia kifurushi kisha ambatisha screenshot ya meseji ya malipo.</p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -461,11 +476,41 @@ export default function LizyTradeEnterprise() {
               </div>
             </div>
 
+            {/* Receipt Screenshot Upload Box */}
+            <div>
+              <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">
+                Weka Screenshot ya Meseji ya Malipo (Payment Receipt):
+              </label>
+              <div className="border-2 border-dashed border-blue-900/60 hover:border-cyan-400/60 rounded-2xl p-4 text-center cursor-pointer transition-all bg-[#040817]">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageUpload}
+                  className="hidden"
+                  id="receipt-upload"
+                />
+                <label htmlFor="receipt-upload" className="cursor-pointer flex flex-col items-center gap-2">
+                  {receiptImage ? (
+                    <div className="flex items-center gap-2 text-emerald-400 font-bold text-xs">
+                      <CheckCircle className="w-5 h-5" />
+                      <span>Screenshot Imepakiwa (Bofya kubadilisha)</span>
+                    </div>
+                  ) : (
+                    <>
+                      <Upload className="w-6 h-6 text-cyan-400" />
+                      <span className="text-xs text-slate-300 font-semibold">Bofya hapa ku-upload screenshot ya malipo</span>
+                      <span className="text-[10px] text-slate-500">PNG, JPG, au JPEG</span>
+                    </>
+                  )}
+                </label>
+              </div>
+            </div>
+
             <button
               type="submit"
               className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold py-3.5 rounded-xl text-xs uppercase tracking-wider transition-all shadow-lg shadow-emerald-500/20 active:scale-[0.98] cursor-pointer"
             >
-              Kamilisha & Tuma Taarifa za Malipo
+              Wasilisha Taarifa za Malipo
             </button>
           </form>
 
@@ -484,7 +529,57 @@ export default function LizyTradeEnterprise() {
   }
 
   // ==========================================
-  // 3. ADMIN PANEL
+  // 3. WAITING FOR APPROVAL SCREEN
+  // ==========================================
+  if (currentView === "WAITING_APPROVAL") {
+    return (
+      <div className="min-h-screen bg-[#040817] text-slate-100 p-4 font-sans flex items-center justify-center">
+        <div className="max-w-md w-full bg-[#0a1128] border border-blue-900/50 rounded-3xl p-8 shadow-2xl text-center space-y-6">
+          <div className="inline-flex p-4 bg-amber-500/10 border border-amber-500/30 rounded-3xl text-amber-400 animate-pulse">
+            <Clock className="w-10 h-10" />
+          </div>
+
+          <div className="space-y-2">
+            <h2 className="text-xl font-black text-white">Inasubiri Uhakiki wa Admin</h2>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Taarifa zako na ushahidi wa malipo umepokelewa. Admin anahakiki taarifa zako na akaunti yako itawashwa mara moja.
+            </p>
+          </div>
+
+          <div className="bg-[#040817] border border-blue-900/50 rounded-2xl p-4 text-xs text-left space-y-2 font-mono">
+            <div className="flex justify-between">
+              <span className="text-slate-400">Hali (Status):</span>
+              <span className="text-amber-400 font-bold uppercase">PENDING APPROVAL</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-400">Msaada wa Haraka:</span>
+              <span className="text-cyan-400 font-bold">0628 940 590</span>
+            </div>
+          </div>
+
+          <a
+            href="https://wa.me/255628940590?text=Habari%20Admin%20LizyTrade,%20nimejisajili%20na%20kutuma%20screenshot%20ya%20malipo.%20Naomba%20kuidhinishwa."
+            target="_blank"
+            rel="noreferrer"
+            className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl text-xs uppercase flex items-center justify-center gap-2 transition-all shadow-lg shadow-emerald-600/20"
+          >
+            <MessageCircle className="w-4 h-4" />
+            <span>Tuma Ujumbe WhatsApp Kuharakisha</span>
+          </a>
+
+          <button
+            onClick={() => setCurrentView("AUTH")}
+            className="text-xs text-slate-400 hover:text-white transition-all block mx-auto"
+          >
+            Rudi Kwenye Ukurasa wa Kuingia (Login)
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ==========================================
+  // 4. ADMIN PANEL (VIEW SCREENSHOTS & APPROVE)
   // ==========================================
   if (currentView === "ADMIN") {
     return (
@@ -496,7 +591,7 @@ export default function LizyTradeEnterprise() {
                 <Crown className="w-7 h-7 text-amber-400" />
                 LizyTrade Admin Approval Panel
               </h1>
-              <p className="text-xs text-slate-400">Dhibiti watumiaji, thibitisha risiti za malipo na ufungue leseni</p>
+              <p className="text-xs text-slate-400">Kagua risiti, thibitisha watumiaji na wezesha akaunti zao</p>
             </div>
             <button
               onClick={() => setCurrentView("DASHBOARD")}
@@ -517,9 +612,10 @@ export default function LizyTradeEnterprise() {
                   <tr className="border-b border-blue-900/40 text-slate-400 font-semibold uppercase text-[10px]">
                     <th className="py-3 px-3">Mtumiaji</th>
                     <th className="py-3 px-3">Deriv Account ID</th>
-                    <th className="py-3 px-3">Simu ya Malipo</th>
+                    <th className="py-3 px-3">Simu</th>
                     <th className="py-3 px-3">Kifurushi</th>
-                    <th className="py-3 px-3">Transaction Code</th>
+                    <th className="py-3 px-3">Tx Code</th>
+                    <th className="py-3 px-3">Screenshot</th>
                     <th className="py-3 px-3">Hali (Status)</th>
                     <th className="py-3 px-3 text-center">Hatua</th>
                   </tr>
@@ -538,6 +634,18 @@ export default function LizyTradeEnterprise() {
                       <td className="py-3 px-3 text-slate-300">{user.phone}</td>
                       <td className="py-3 px-3 text-slate-300 font-sans text-[11px]">{user.plan}</td>
                       <td className="py-3 px-3 text-amber-400 font-bold">{user.txCode}</td>
+                      <td className="py-3 px-3 font-sans">
+                        {user.receiptImage ? (
+                          <button
+                            onClick={() => setViewingReceipt(user.receiptImage || null)}
+                            className="bg-blue-600/20 hover:bg-blue-600/40 text-cyan-300 border border-blue-500/30 px-2.5 py-1 rounded-lg text-[10px] flex items-center gap-1"
+                          >
+                            <ImageIcon className="w-3 h-3" /> Angalia
+                          </button>
+                        ) : (
+                          <span className="text-slate-500 text-[10px]">Hakuna</span>
+                        )}
+                      </td>
                       <td className="py-3 px-3">
                         <span className={`px-2.5 py-1 rounded-full text-[9px] font-bold uppercase font-sans ${user.status === "APPROVED" ? "bg-emerald-500/20 text-emerald-400" : user.status === "PENDING" ? "bg-amber-500/20 text-amber-400" : "bg-rose-500/20 text-rose-400"
                           }`}>
@@ -569,12 +677,32 @@ export default function LizyTradeEnterprise() {
             </div>
           </div>
         </div>
+
+        {/* Modal: View Receipt Screenshot */}
+        {viewingReceipt && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
+            <div className="bg-[#0a1128] border border-blue-900/60 rounded-3xl p-6 max-w-lg w-full space-y-4 relative">
+              <div className="flex justify-between items-center">
+                <h3 className="text-xs font-bold text-white uppercase tracking-wider">Ushahidi wa Malipo (Screenshot)</h3>
+                <button
+                  onClick={() => setViewingReceipt(null)}
+                  className="text-slate-400 hover:text-white"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="max-h-[70vh] overflow-auto rounded-xl border border-blue-900/40">
+                <img src={viewingReceipt} alt="Receipt Screenshot" className="w-full object-contain" />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
 
   // ==========================================
-  // 4. LIVE ACTIVE DASHBOARD
+  // 5. LIVE TRADING DASHBOARD
   // ==========================================
   return (
     <div className="min-h-screen bg-[#040817] text-slate-100 p-4 md:p-8 font-sans">
@@ -624,7 +752,7 @@ export default function LizyTradeEnterprise() {
         </div>
       </header>
 
-      {/* Main Trading Area */}
+      {/* Main Grid Content */}
       <main className="max-w-7xl mx-auto mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="space-y-6">
           <div className="bg-[#0a1128] border border-blue-900/40 rounded-3xl p-6 shadow-xl space-y-5">

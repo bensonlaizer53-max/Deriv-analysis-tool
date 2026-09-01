@@ -23,7 +23,9 @@ import {
   Code2,
   KeyRound,
   Eye,
-  EyeOff
+  EyeOff,
+  Crown,
+  Wallet
 } from "lucide-react";
 
 interface UserRecord {
@@ -35,41 +37,39 @@ interface UserRecord {
   plan: string;
   phone: string;
   txCode: string;
+  role: "ADMIN" | "USER";
   status: "APPROVED" | "PENDING" | "REJECTED";
 }
 
-export default function LizyTradeEnterpriseApp() {
+export default function EnterpriseProApp() {
   const [currentView, setCurrentView] = useState<"PORTAL" | "DASHBOARD" | "ADMIN">("PORTAL");
-  const [authMode, setAuthMode] = useState<"LOGIN" | "REGISTER">("REGISTER");
+  const [authMode, setAuthMode] = useState<"LOGIN" | "REGISTER">("LOGIN");
 
-  // Registration & Login Form States
+  // Authentication Fields
   const [fullName, setFullName] = useState("");
-  const [email, setEmail] = useState("");
-  const [derivAccountId, setDerivAccountId] = useState("");
-  const [userPassword, setUserPassword] = useState("");
-  const [phoneNumber, setPhoneNumber] = useState("");
-  const [selectedPlan, setSelectedPlan] = useState<"1_MONTH" | "3_MONTHS" | "LIFETIME">("1_MONTH");
-  const [transactionCode, setTransactionCode] = useState("");
+  const [email, setEmail] = useState("bensonlaizer53@gmail.com");
+  const [derivAccountId, setDerivAccountId] = useState("ROT91981412");
+  const [userPassword, setUserPassword] = useState("LizyTrade2026@");
+  const [phoneNumber, setPhoneNumber] = useState("0752642148");
+  const [selectedPlan, setSelectedPlan] = useState<"1_MONTH" | "3_MONTHS" | "LIFETIME">("LIFETIME");
+  const [transactionCode, setTransactionCode] = useState("TX-VIP-DIRECT");
   const [showPassword, setShowPassword] = useState(false);
 
   // Active Session
   const [currentUser, setCurrentUser] = useState<UserRecord | null>(null);
 
-  // Admin Credentials
-  const [adminPassword, setAdminPassword] = useState("");
-  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
-
-  // Local Storage Database for Users
+  // Registered Users Mock Database
   const [usersList, setUsersList] = useState<UserRecord[]>([
     {
-      id: "1",
-      name: "Benson Mkaine (Founder)",
+      id: "admin-root",
+      name: "Benson Mkaine",
       email: "bensonlaizer53@gmail.com",
-      derivId: "CR9182345",
-      password: "admin",
-      plan: "LIFETIME VIP",
+      derivId: "ROT91981412",
+      password: "LizyTrade2026@",
+      plan: "LIFETIME UNLIMITED VIP",
       phone: "0752642148",
-      txCode: "FOUNDER-DIRECT",
+      txCode: "FOUNDER-ROOT-MASTER",
+      role: "ADMIN",
       status: "APPROVED",
     }
   ]);
@@ -85,11 +85,9 @@ export default function LizyTradeEnterpriseApp() {
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  const ADMIN_PASS_KEY = "LizyTradeAdmin2026@";
-
-  // Load saved users from LocalStorage on first render
+  // Load / Save Local Storage
   useEffect(() => {
-    const saved = localStorage.getItem("lizytrade_registered_users");
+    const saved = localStorage.getItem("lizytrade_v3_users");
     if (saved) {
       try {
         setUsersList(JSON.parse(saved));
@@ -97,12 +95,12 @@ export default function LizyTradeEnterpriseApp() {
     }
   }, []);
 
-  const saveUsersToStorage = (users: UserRecord[]) => {
-    setUsersList(users);
-    localStorage.setItem("lizytrade_registered_users", JSON.stringify(users));
+  const saveUsers = (updated: UserRecord[]) => {
+    setUsersList(updated);
+    localStorage.setItem("lizytrade_v3_users", JSON.stringify(updated));
   };
 
-  // User Registration
+  // User Registration Handler
   const handleRegister = (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !derivAccountId || !phoneNumber || !transactionCode || !userPassword) {
@@ -113,38 +111,53 @@ export default function LizyTradeEnterpriseApp() {
     const newUser: UserRecord = {
       id: Date.now().toString(),
       name: fullName || email.split("@")[0],
-      email,
-      derivId: derivAccountId,
+      email: email.trim().toLowerCase(),
+      derivId: derivAccountId.trim().toUpperCase(),
       password: userPassword,
       plan: selectedPlan === "1_MONTH" ? "1 MONTH PRO (Tsh 50,000)" : selectedPlan === "3_MONTHS" ? "3 MONTHS VIP (Tsh 120,000)" : "LIFETIME UNLIMITED (Tsh 250,000)",
       phone: phoneNumber,
       txCode: transactionCode,
+      role: "USER",
       status: "PENDING",
     };
 
     const updated = [...usersList, newUser];
-    saveUsersToStorage(updated);
-    alert("Usajili wako umepokelewa kwa mafanikio! Tafadhali subiri Admin athibitishe malipo yako au wasiliana naye kupitia WhatsApp ili akaunti iwashwe.");
+    saveUsers(updated);
+    alert("Usajili wako umepokelewa! Subiri Admin athibitishe malipo au wasiliana naye WhatsApp kwa uthibitisho wa haraka.");
     setAuthMode("LOGIN");
   };
 
-  // User Password Login
+  // User & Admin Login Handler (Triple Verification: Email + Deriv ID + Password)
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanDeriv = derivAccountId.trim().toUpperCase();
+
+    // Auto-authenticate Founder
+    if (
+      (cleanEmail === "bensonlaizer53@gmail.com" || cleanDeriv === "ROT91981412") &&
+      userPassword === "LizyTrade2026@"
+    ) {
+      const adminAcc = usersList[0];
+      setCurrentUser(adminAcc);
+      setCurrentView("DASHBOARD");
+      return;
+    }
+
     const user = usersList.find(
       (u) =>
-        (u.email.toLowerCase() === email.toLowerCase() ||
-          u.derivId.toLowerCase() === derivAccountId.toLowerCase()) &&
+        u.email.toLowerCase() === cleanEmail &&
+        u.derivId.toUpperCase() === cleanDeriv &&
         u.password === userPassword
     );
 
     if (!user) {
-      alert("Email/Deriv ID au Nenosiri (Password) si sahihi! Hakikisha umejisajili kwanza.");
+      alert("Taarifa si sahihi! Hakikisha Email, Deriv Account ID na Nenosiri vinalingana.");
       return;
     }
 
     if (user.status !== "APPROVED") {
-      alert("Akaunti yako bado ipo 'PENDING APPROVAL'. Tafadhali wasiliana na Admin kupitia WhatsApp kuthibitisha malipo.");
+      alert("Akaunti yako bado inasubiri uhakiki wa malipo (PENDING). Wasiliana na Admin kupitia WhatsApp: 0628 940 590");
       return;
     }
 
@@ -152,27 +165,18 @@ export default function LizyTradeEnterpriseApp() {
     setCurrentView("DASHBOARD");
   };
 
-  // Admin Handlers
-  const handleAdminAuth = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (adminPassword === ADMIN_PASS_KEY) {
-      setIsAdminLoggedIn(true);
-    } else {
-      alert("Nenosiri la Admin si sahihi!");
-    }
-  };
-
+  // Admin Approval Functions
   const approveUser = (id: string) => {
     const updated = usersList.map((u) => (u.id === id ? { ...u, status: "APPROVED" as const } : u));
-    saveUsersToStorage(updated);
+    saveUsers(updated);
   };
 
   const rejectUser = (id: string) => {
     const updated = usersList.map((u) => (u.id === id ? { ...u, status: "REJECTED" as const } : u));
-    saveUsersToStorage(updated);
+    saveUsers(updated);
   };
 
-  // Live Signals API
+  // Live Trading Engine Fetcher
   const fetchSignals = async () => {
     try {
       const res = await fetch(`/api/signals?symbol=${symbol}&ticks=${ticksCount}`);
@@ -214,113 +218,93 @@ export default function LizyTradeEnterpriseApp() {
           <div className="flex justify-between items-center pb-4 border-b border-blue-900/40">
             <div>
               <h1 className="text-2xl font-black text-white flex items-center gap-2">
-                <ShieldCheck className="w-7 h-7 text-cyan-400" />
-                LizyTrade Admin Approval Portal
+                <Crown className="w-7 h-7 text-amber-400" />
+                LizyTrade Admin Approval Panel
               </h1>
-              <p className="text-xs text-slate-400">Dhibiti malipo, thibitisha watumiaji na wezesha akaunti zao</p>
+              <p className="text-xs text-slate-400">Dhibiti watumiaji, thibitisha risiti za malipo na ufungue leseni</p>
             </div>
             <button
-              onClick={() => setCurrentView("PORTAL")}
-              className="bg-slate-800 hover:bg-slate-700 text-xs px-4 py-2 rounded-xl text-slate-200"
+              onClick={() => setCurrentView("DASHBOARD")}
+              className="bg-blue-600 hover:bg-blue-500 text-xs px-4 py-2.5 rounded-xl font-bold text-white transition-all shadow-lg shadow-blue-600/30"
             >
-              Rudi Portal
+              Rudi Kwenye Dashibodi
             </button>
           </div>
 
-          {!isAdminLoggedIn ? (
-            <div className="max-w-md mx-auto bg-[#0a1128] border border-blue-900/40 p-8 rounded-3xl mt-12 space-y-4">
-              <h2 className="text-sm font-bold text-white uppercase text-center">Weka Admin Master Password</h2>
-              <form onSubmit={handleAdminAuth} className="space-y-4">
-                <input
-                  type="password"
-                  placeholder="Master Admin Key"
-                  value={adminPassword}
-                  onChange={(e) => setAdminPassword(e.target.value)}
-                  className="w-full bg-[#040817] border border-blue-900/50 rounded-xl px-4 py-3 text-xs text-white focus:outline-none focus:border-cyan-400"
-                />
-                <button
-                  type="submit"
-                  className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl text-xs uppercase"
-                >
-                  Fungua Admin Panel
-                </button>
-              </form>
-            </div>
-          ) : (
-            <div className="bg-[#0a1128] border border-blue-900/40 rounded-3xl p-6 space-y-4">
-              <h2 className="text-sm font-bold uppercase tracking-wider text-cyan-400 flex items-center gap-2 mb-4">
-                <Users className="w-4 h-4" /> Orodha ya Watumiaji na Malipo ({usersList.length})
-              </h2>
+          <div className="bg-[#0a1128] border border-blue-900/40 rounded-3xl p-6 space-y-4">
+            <h2 className="text-xs font-bold uppercase tracking-wider text-cyan-400 flex items-center gap-2 mb-4">
+              <Users className="w-4 h-4" /> Maombi ya Usajili na Malipo ({usersList.length})
+            </h2>
 
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead>
-                    <tr className="border-b border-blue-900/40 text-slate-400 font-semibold uppercase text-[10px]">
-                      <th className="py-3 px-3">Mtumiaji</th>
-                      <th className="py-3 px-3">Deriv Account</th>
-                      <th className="py-3 px-3">Simu ya Malipo</th>
-                      <th className="py-3 px-3">Kifurushi</th>
-                      <th className="py-3 px-3">Transaction Code</th>
-                      <th className="py-3 px-3">Password</th>
-                      <th className="py-3 px-3">Hali (Status)</th>
-                      <th className="py-3 px-3 text-center">Hatua</th>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="border-b border-blue-900/40 text-slate-400 font-semibold uppercase text-[10px]">
+                    <th className="py-3 px-3">Mtumiaji</th>
+                    <th className="py-3 px-3">Deriv Account ID</th>
+                    <th className="py-3 px-3">Simu ya Malipo</th>
+                    <th className="py-3 px-3">Kifurushi</th>
+                    <th className="py-3 px-3">Transaction Code</th>
+                    <th className="py-3 px-3">Hali (Status)</th>
+                    <th className="py-3 px-3 text-center">Hatua</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-blue-900/20 font-mono">
+                  {usersList.map((user) => (
+                    <tr key={user.id} className="hover:bg-blue-950/20">
+                      <td className="py-3 px-3 font-sans">
+                        <span className="font-bold text-white block flex items-center gap-1.5">
+                          {user.name}
+                          {user.role === "ADMIN" && <Crown className="w-3.5 h-3.5 text-amber-400 inline" />}
+                        </span>
+                        <span className="text-[10px] text-slate-400">{user.email}</span>
+                      </td>
+                      <td className="py-3 px-3 text-cyan-400 font-bold">{user.derivId}</td>
+                      <td className="py-3 px-3 text-slate-300">{user.phone}</td>
+                      <td className="py-3 px-3 text-slate-300 font-sans text-[11px]">{user.plan}</td>
+                      <td className="py-3 px-3 text-amber-400 font-bold">{user.txCode}</td>
+                      <td className="py-3 px-3">
+                        <span className={`px-2.5 py-1 rounded-full text-[9px] font-bold uppercase font-sans ${user.status === "APPROVED" ? "bg-emerald-500/20 text-emerald-400" : user.status === "PENDING" ? "bg-amber-500/20 text-amber-400" : "bg-rose-500/20 text-rose-400"
+                          }`}>
+                          {user.status}
+                        </span>
+                      </td>
+                      <td className="py-3 px-3 text-center space-x-2">
+                        {user.role !== "ADMIN" && user.status !== "APPROVED" && (
+                          <button
+                            onClick={() => approveUser(user.id)}
+                            className="bg-emerald-600 hover:bg-emerald-500 text-white px-2.5 py-1 rounded-lg text-[10px] font-bold font-sans cursor-pointer"
+                          >
+                            Approve
+                          </button>
+                        )}
+                        {user.role !== "ADMIN" && user.status !== "REJECTED" && (
+                          <button
+                            onClick={() => rejectUser(user.id)}
+                            className="bg-rose-600/20 hover:bg-rose-600/40 text-rose-300 border border-rose-500/30 px-2 py-1 rounded-lg text-[10px] font-sans cursor-pointer"
+                          >
+                            Reject
+                          </button>
+                        )}
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody className="divide-y divide-blue-900/20 font-mono">
-                    {usersList.map((user) => (
-                      <tr key={user.id} className="hover:bg-blue-950/20">
-                        <td className="py-3 px-3 font-sans">
-                          <span className="font-bold text-white block">{user.name}</span>
-                          <span className="text-[10px] text-slate-400">{user.email}</span>
-                        </td>
-                        <td className="py-3 px-3 text-cyan-400 font-bold">{user.derivId}</td>
-                        <td className="py-3 px-3 text-slate-300">{user.phone}</td>
-                        <td className="py-3 px-3 text-slate-300 font-sans text-[11px]">{user.plan}</td>
-                        <td className="py-3 px-3 text-amber-400 font-bold">{user.txCode}</td>
-                        <td className="py-3 px-3 text-slate-400">{user.password}</td>
-                        <td className="py-3 px-3">
-                          <span className={`px-2.5 py-1 rounded-full text-[9px] font-bold uppercase font-sans ${user.status === "APPROVED" ? "bg-emerald-500/20 text-emerald-400" : user.status === "PENDING" ? "bg-amber-500/20 text-amber-400" : "bg-rose-500/20 text-rose-400"
-                            }`}>
-                            {user.status}
-                          </span>
-                        </td>
-                        <td className="py-3 px-3 text-center space-x-2">
-                          {user.status !== "APPROVED" && (
-                            <button
-                              onClick={() => approveUser(user.id)}
-                              className="bg-emerald-600 hover:bg-emerald-500 text-white px-2.5 py-1 rounded-lg text-[10px] font-bold font-sans"
-                            >
-                              Approve
-                            </button>
-                          )}
-                          {user.status !== "REJECTED" && (
-                            <button
-                              onClick={() => rejectUser(user.id)}
-                              className="bg-rose-600/20 hover:bg-rose-600/40 text-rose-300 border border-rose-500/30 px-2 py-1 rounded-lg text-[10px] font-sans"
-                            >
-                              Reject
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          )}
+          </div>
         </div>
       </div>
     );
   }
 
   // ==========================================
-  // VIEW 2: REGISTRATION & LOGIN PORTAL
+  // VIEW 2: PROFESSIONAL AUTH & SUBSCRIPTION PORTAL
   // ==========================================
   if (currentView === "PORTAL") {
     return (
       <div className="min-h-screen bg-[#040817] bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(37,99,235,0.25),rgba(255,255,255,0))] text-slate-100 p-4 md:p-8 font-sans flex flex-col justify-between">
-        <div className="max-w-4xl mx-auto w-full my-auto py-8">
+        <div className="max-w-4xl mx-auto w-full my-auto py-6">
           {/* Header */}
           <div className="text-center space-y-3 mb-8">
             <div className="inline-flex p-3.5 bg-gradient-to-br from-blue-600/30 to-cyan-500/20 border border-cyan-500/40 rounded-3xl text-cyan-400 shadow-xl shadow-cyan-500/10">
@@ -330,12 +314,12 @@ export default function LizyTradeEnterpriseApp() {
               LizyTrade AI Signal Pro
             </h1>
             <p className="text-xs md:text-sm text-slate-400 max-w-xl mx-auto">
-              Mfumo Mahiri wa Uchambuzi wa Namba za Synthetic Indices kwa Bots za LizyTrade na Tovuti Binafsi za Watumiaji.
+              Mfumo Mahiri wa Uchambuzi wa Namba za Synthetic Indices kwa Bots za LizyTrade na Tovuti Binafsi.
             </p>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-            {/* Left: Payment Info */}
+            {/* Left: Subscription Tiers & Payment Gateways */}
             <div className="lg:col-span-5 bg-[#0a1128] border border-blue-900/40 rounded-3xl p-6 shadow-2xl space-y-6">
               <div>
                 <h3 className="text-xs font-black text-cyan-400 uppercase tracking-wider flex items-center gap-2">
@@ -344,7 +328,7 @@ export default function LizyTradeEnterpriseApp() {
                 <div className="mt-3 space-y-2.5">
                   <div
                     onClick={() => setSelectedPlan("1_MONTH")}
-                    className={`p-3 rounded-2xl border cursor-pointer transition-all flex items-center justify-between ${selectedPlan === "1_MONTH" ? "bg-blue-600/20 border-cyan-400 text-white" : "bg-[#040817] border-blue-900/30 text-slate-400"
+                    className={`p-3.5 rounded-2xl border cursor-pointer transition-all flex items-center justify-between ${selectedPlan === "1_MONTH" ? "bg-blue-600/20 border-cyan-400 text-white" : "bg-[#040817] border-blue-900/30 text-slate-400"
                       }`}
                   >
                     <div>
@@ -356,7 +340,7 @@ export default function LizyTradeEnterpriseApp() {
 
                   <div
                     onClick={() => setSelectedPlan("3_MONTHS")}
-                    className={`p-3 rounded-2xl border cursor-pointer transition-all flex items-center justify-between ${selectedPlan === "3_MONTHS" ? "bg-blue-600/20 border-cyan-400 text-white" : "bg-[#040817] border-blue-900/30 text-slate-400"
+                    className={`p-3.5 rounded-2xl border cursor-pointer transition-all flex items-center justify-between ${selectedPlan === "3_MONTHS" ? "bg-blue-600/20 border-cyan-400 text-white" : "bg-[#040817] border-blue-900/30 text-slate-400"
                       }`}
                   >
                     <div>
@@ -368,7 +352,7 @@ export default function LizyTradeEnterpriseApp() {
 
                   <div
                     onClick={() => setSelectedPlan("LIFETIME")}
-                    className={`p-3 rounded-2xl border cursor-pointer transition-all flex items-center justify-between ${selectedPlan === "LIFETIME" ? "bg-blue-600/20 border-cyan-400 text-white" : "bg-[#040817] border-blue-900/30 text-slate-400"
+                    className={`p-3.5 rounded-2xl border cursor-pointer transition-all flex items-center justify-between ${selectedPlan === "LIFETIME" ? "bg-blue-600/20 border-cyan-400 text-white" : "bg-[#040817] border-blue-900/30 text-slate-400"
                       }`}
                   >
                     <div>
@@ -380,20 +364,20 @@ export default function LizyTradeEnterpriseApp() {
                 </div>
               </div>
 
-              {/* Payment Details */}
+              {/* Exact Payment Channels */}
               <div className="pt-4 border-t border-blue-900/40 space-y-3">
                 <h3 className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-2">
-                  <PhoneCall className="w-4 h-4 text-emerald-400" /> Njia za Malipo:
+                  <PhoneCall className="w-4 h-4 text-emerald-400" /> Njia za Malipo (Tanzania):
                 </h3>
 
-                <div className="bg-[#040817] border border-blue-900/50 rounded-2xl p-3.5 space-y-2 text-xs">
+                <div className="bg-[#040817] border border-blue-900/50 rounded-2xl p-4 space-y-2 text-xs">
                   <div className="flex justify-between items-center">
                     <span className="text-slate-400">Namba ya Malipo (M-Pesa):</span>
-                    <span className="font-mono font-black text-cyan-300 text-sm">0752 642 148</span>
+                    <span className="font-mono font-black text-cyan-300 text-sm tracking-wider">0752 642 148</span>
                   </div>
-                  <div className="flex justify-between items-center pt-1 border-t border-blue-900/30">
+                  <div className="flex justify-between items-center pt-2 border-t border-blue-900/30">
                     <span className="text-slate-400">Jina la Usajili:</span>
-                    <span className="font-bold text-white uppercase">BENSON LAIZER MKAINE</span>
+                    <span className="font-bold text-white uppercase tracking-tight">BENSON LAIZER MKAINE</span>
                   </div>
                 </div>
 
@@ -409,74 +393,66 @@ export default function LizyTradeEnterpriseApp() {
               </div>
             </div>
 
-            {/* Right: Auth Forms */}
+            {/* Right: Triple-Verification Auth Form */}
             <div className="lg:col-span-7 bg-[#0a1128] border border-blue-900/40 rounded-3xl p-6 md:p-8 shadow-2xl space-y-6">
               <div className="flex bg-[#040817] p-1 rounded-2xl border border-blue-900/40">
-                <button
-                  onClick={() => setAuthMode("REGISTER")}
-                  className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all ${authMode === "REGISTER" ? "bg-blue-600 text-white shadow-lg shadow-blue-600/20" : "text-slate-400 hover:text-white"
-                    }`}
-                >
-                  1. Jisajili & Lipia
-                </button>
                 <button
                   onClick={() => setAuthMode("LOGIN")}
                   className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all ${authMode === "LOGIN" ? "bg-blue-600 text-white shadow-lg shadow-blue-600/20" : "text-slate-400 hover:text-white"
                     }`}
                 >
-                  2. Ingia (Login kwa Password)
+                  Ingia (Login)
+                </button>
+                <button
+                  onClick={() => setAuthMode("REGISTER")}
+                  className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all ${authMode === "REGISTER" ? "bg-blue-600 text-white shadow-lg shadow-blue-600/20" : "text-slate-400 hover:text-white"
+                    }`}
+                >
+                  Jisajili & Lipia
                 </button>
               </div>
 
-              {authMode === "REGISTER" ? (
-                <form onSubmit={handleRegister} className="space-y-4">
+              {authMode === "LOGIN" ? (
+                <form onSubmit={handleLogin} className="space-y-4">
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">Jina Kamili:</label>
+                    <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">
+                      1. Barua Pepe (Email):
+                    </label>
                     <input
-                      type="text"
+                      type="email"
                       required
-                      value={fullName}
-                      onChange={(e) => setFullName(e.target.value)}
-                      placeholder="Mfano: Rashid Ally"
-                      className="w-full bg-[#040817] border border-blue-900/50 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-400 font-sans"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="bensonlaizer53@gmail.com"
+                      className="w-full bg-[#040817] border border-blue-900/50 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-400 font-mono"
                     />
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">Barua Pepe (Email):</label>
-                      <input
-                        type="email"
-                        required
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        placeholder="jina@example.com"
-                        className="w-full bg-[#040817] border border-blue-900/50 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-400 font-mono"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">Deriv Account ID:</label>
-                      <input
-                        type="text"
-                        required
-                        value={derivAccountId}
-                        onChange={(e) => setDerivAccountId(e.target.value)}
-                        placeholder="CR918234 / VRTC123"
-                        className="w-full bg-[#040817] border border-blue-900/50 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-400 font-mono uppercase"
-                      />
-                    </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">
+                      2. Deriv Account ID (Kama inavyoonekana juu kulia):
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={derivAccountId}
+                      onChange={(e) => setDerivAccountId(e.target.value)}
+                      placeholder="mfano: ROT91981412 au CR..."
+                      className="w-full bg-[#040817] border border-blue-900/50 rounded-xl px-4 py-2.5 text-xs text-cyan-300 font-bold uppercase focus:outline-none focus:border-cyan-400 font-mono"
+                    />
                   </div>
 
-                  {/* Password Creation */}
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">Tengeneza Nenosiri (Password):</label>
+                    <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">
+                      3. Nenosiri (Password):
+                    </label>
                     <div className="relative">
                       <input
                         type={showPassword ? "text" : "password"}
                         required
                         value={userPassword}
                         onChange={(e) => setUserPassword(e.target.value)}
-                        placeholder="Weka password yako salama"
+                        placeholder="Weka nenosiri lako"
                         className="w-full bg-[#040817] border border-blue-900/50 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-400 font-mono"
                       />
                       <button
@@ -489,27 +465,86 @@ export default function LizyTradeEnterpriseApp() {
                     </div>
                   </div>
 
+                  <button
+                    type="submit"
+                    className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold py-3.5 rounded-xl text-xs uppercase tracking-wider transition-all shadow-lg shadow-emerald-500/20 active:scale-[0.98] mt-2 cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    <Lock className="w-4 h-4" />
+                    <span>Fungua AI Trading Tool</span>
+                  </button>
+                </form>
+              ) : (
+                <form onSubmit={handleRegister} className="space-y-3.5">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">Jina Kamili:</label>
+                    <input
+                      type="text"
+                      required
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                      placeholder="Benson Ally"
+                      className="w-full bg-[#040817] border border-blue-900/50 rounded-xl px-4 py-2 text-xs text-white focus:outline-none focus:border-cyan-400 font-sans"
+                    />
+                  </div>
+
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">Namba ya Simu ya Malipo:</label>
+                      <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">Email:</label>
+                      <input
+                        type="email"
+                        required
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="user@example.com"
+                        className="w-full bg-[#040817] border border-blue-900/50 rounded-xl px-4 py-2 text-xs text-white focus:outline-none focus:border-cyan-400 font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">Deriv Account ID:</label>
+                      <input
+                        type="text"
+                        required
+                        value={derivAccountId}
+                        onChange={(e) => setDerivAccountId(e.target.value)}
+                        placeholder="ROT91981412"
+                        className="w-full bg-[#040817] border border-blue-900/50 rounded-xl px-4 py-2 text-xs text-white focus:outline-none focus:border-cyan-400 font-mono uppercase"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">Tengeneza Nenosiri:</label>
+                    <input
+                      type="password"
+                      required
+                      value={userPassword}
+                      onChange={(e) => setUserPassword(e.target.value)}
+                      placeholder="Nenosiri imara"
+                      className="w-full bg-[#040817] border border-blue-900/50 rounded-xl px-4 py-2 text-xs text-white focus:outline-none focus:border-cyan-400 font-mono"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">Simu ya Malipo:</label>
                       <input
                         type="text"
                         required
                         value={phoneNumber}
                         onChange={(e) => setPhoneNumber(e.target.value)}
                         placeholder="0755..."
-                        className="w-full bg-[#040817] border border-blue-900/50 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-400 font-mono"
+                        className="w-full bg-[#040817] border border-blue-900/50 rounded-xl px-4 py-2 text-xs text-white focus:outline-none focus:border-cyan-400 font-mono"
                       />
                     </div>
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">Transaction ID / Code:</label>
+                      <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">Transaction ID (M-Pesa):</label>
                       <input
                         type="text"
                         required
                         value={transactionCode}
                         onChange={(e) => setTransactionCode(e.target.value)}
-                        placeholder="Mfano: QRT88921"
-                        className="w-full bg-[#040817] border border-blue-900/50 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-400 font-mono uppercase"
+                        placeholder="QRT88921"
+                        className="w-full bg-[#040817] border border-blue-900/50 rounded-xl px-4 py-2 text-xs text-white focus:outline-none focus:border-cyan-400 font-mono uppercase"
                       />
                     </div>
                   </div>
@@ -518,50 +553,7 @@ export default function LizyTradeEnterpriseApp() {
                     type="submit"
                     className="w-full bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white font-bold py-3.5 rounded-xl text-xs uppercase tracking-wider transition-all shadow-lg shadow-cyan-500/20 active:scale-[0.98] mt-2 cursor-pointer"
                   >
-                    Tuma Ombi la Usajili
-                  </button>
-                </form>
-              ) : (
-                <form onSubmit={handleLogin} className="space-y-4">
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">Email au Deriv Account ID:</label>
-                    <input
-                      type="text"
-                      required
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="bensonlaizer53@gmail.com au CR9182345"
-                      className="w-full bg-[#040817] border border-blue-900/50 rounded-xl px-4 py-3 text-xs text-white focus:outline-none focus:border-cyan-400 font-mono"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">Nenosiri (Password):</label>
-                    <div className="relative">
-                      <input
-                        type={showPassword ? "text" : "password"}
-                        required
-                        value={userPassword}
-                        onChange={(e) => setUserPassword(e.target.value)}
-                        placeholder="Weka password yako"
-                        className="w-full bg-[#040817] border border-blue-900/50 rounded-xl px-4 py-3 text-xs text-white focus:outline-none focus:border-cyan-400 font-mono"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-3 text-slate-400 hover:text-white"
-                      >
-                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    </div>
-                  </div>
-
-                  <button
-                    type="submit"
-                    className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold py-3.5 rounded-xl text-xs uppercase tracking-wider transition-all shadow-lg shadow-emerald-500/20 active:scale-[0.98] mt-2 cursor-pointer flex items-center justify-center gap-2"
-                  >
-                    <Lock className="w-4 h-4" />
-                    <span>Ingia kwenye AI Trading Tool</span>
+                    Kamilisha Usajili
                   </button>
                 </form>
               )}
@@ -569,22 +561,16 @@ export default function LizyTradeEnterpriseApp() {
           </div>
         </div>
 
-        {/* Footer with Admin Panel Link */}
-        <footer className="max-w-4xl mx-auto w-full pt-6 border-t border-blue-900/40 flex justify-between items-center text-[11px] text-slate-500">
+        <footer className="max-w-4xl mx-auto w-full pt-4 border-t border-blue-900/40 flex justify-between items-center text-[11px] text-slate-500">
           <span>&copy; 2026 LizyTrade Pro AI. All Rights Reserved.</span>
-          <button
-            onClick={() => setCurrentView("ADMIN")}
-            className="text-slate-400 hover:text-cyan-400 font-bold transition-all"
-          >
-            Admin Approval Panel &rarr;
-          </button>
+          <span className="text-slate-400">Enterprise AI Grade</span>
         </footer>
       </div>
     );
   }
 
   // ==========================================
-  // VIEW 3: LIVE ACTIVE DASHBOARD & EMBED CODES
+  // VIEW 3: LIVE ACTIVE DASHBOARD (FOUNDER / USER)
   // ==========================================
   return (
     <div className="min-h-screen bg-[#040817] text-slate-100 p-4 md:p-8 font-sans">
@@ -598,27 +584,45 @@ export default function LizyTradeEnterpriseApp() {
               <h1 className="text-xl md:text-2xl font-black tracking-tight text-white">
                 LizyTrade AI Signal Engine
               </h1>
-              <span className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider">
-                VIP ACTIVE
-              </span>
+              {currentUser?.role === "ADMIN" ? (
+                <span className="bg-gradient-to-r from-amber-500 to-orange-500 text-black text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1 shadow-md shadow-amber-500/20">
+                  <Crown className="w-3 h-3" /> SUPER ADMIN
+                </span>
+              ) : (
+                <span className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                  VIP ACTIVE
+                </span>
+              )}
             </div>
-            <p className="text-xs text-slate-400">
-              Mtumiaji: <strong className="text-white font-bold">{currentUser?.name || "Benson Mkaine"}</strong> | Deriv ID: <strong className="text-cyan-400 font-mono">{currentUser?.derivId || "CR9182345"}</strong>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Akaunti: <strong className="text-white font-bold">{currentUser?.name}</strong> | Deriv Account ID: <strong className="text-cyan-400 font-mono">{currentUser?.derivId}</strong>
             </p>
           </div>
         </div>
 
-        <button
-          onClick={() => setCurrentView("PORTAL")}
-          className="text-xs text-rose-400 hover:text-rose-300 bg-rose-500/10 px-4 py-2 rounded-xl border border-rose-500/20 font-bold transition-all"
-        >
-          Toka Kwenye Akaunti
-        </button>
+        <div className="flex items-center gap-3">
+          {currentUser?.role === "ADMIN" && (
+            <button
+              onClick={() => setCurrentView("ADMIN")}
+              className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs px-3.5 py-2 rounded-xl font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-lg shadow-amber-500/10"
+            >
+              <Crown className="w-3.5 h-3.5 text-amber-400" />
+              <span>Admin Approval Panel</span>
+            </button>
+          )}
+
+          <button
+            onClick={() => setCurrentView("PORTAL")}
+            className="text-xs text-rose-400 hover:text-rose-300 bg-rose-500/10 px-3.5 py-2 rounded-xl border border-rose-500/20 font-bold transition-all"
+          >
+            Toka
+          </button>
+        </div>
       </header>
 
       {/* Main Grid Content */}
       <main className="max-w-7xl mx-auto mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column */}
+        {/* Left Column: Controls & Integration */}
         <div className="space-y-6">
           <div className="bg-[#0a1128] border border-blue-900/40 rounded-3xl p-6 shadow-xl space-y-5">
             <div className="flex items-center justify-between border-b border-blue-900/40 pb-3">
@@ -687,14 +691,14 @@ export default function LizyTradeEnterpriseApp() {
               <Code2 className="w-4 h-4" /> Unganisha na Tovuti Yako (Embed / API)
             </h3>
             <p className="text-[11px] text-slate-400 leading-relaxed">
-              Weka msimbo huu kwenye tovuti yako yoyote ili tool hii ionekane na kutoa signals mubashara:
+              Mteja au mmiliki anaweza kuweka chati na signals hizi kwenye tovuti yake yoyote kwa Iframe hii:
             </p>
             <div className="bg-[#040817] border border-blue-900/60 rounded-xl p-3 text-[10px] font-mono text-cyan-400 break-all select-all">
               {`<iframe src="https://deriv-analysis-tool-psi.vercel.app" width="100%" height="750px" frameborder="0"></iframe>`}
             </div>
             <button
               onClick={() => copyToClipboard(`<iframe src="https://deriv-analysis-tool-psi.vercel.app" width="100%" height="750px" frameborder="0"></iframe>`)}
-              className="w-full bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 text-cyan-300 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2"
+              className="w-full bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 text-cyan-300 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer"
             >
               <Copy className="w-3.5 h-3.5" />
               <span>{copied ? "Imenakiliwa!" : "Copy Embed Code"}</span>
@@ -702,7 +706,7 @@ export default function LizyTradeEnterpriseApp() {
           </div>
         </div>
 
-        {/* Right Columns: AI Signals & Heatmap */}
+        {/* Right Columns: AI Predictions & Heatmap */}
         <div className="lg:col-span-2 space-y-6">
           <div className="bg-[#0a1128] border border-blue-900/40 rounded-3xl p-6 shadow-2xl relative overflow-hidden">
             <div className="flex items-center justify-between pb-4 border-b border-blue-900/40">
@@ -728,7 +732,7 @@ export default function LizyTradeEnterpriseApp() {
                     {data?.aiRecommendation?.target || "--"}
                   </span>
                 </div>
-                {data?.aiRecommendation?.target && data.aiRecommendation.target !== "--" && (
+                {data?.aiRecommendation?.target && data.aiRecommendation?.target !== "--" && (
                   <button
                     onClick={() => copyToClipboard(data.aiRecommendation.target.replace("DIGIT ", ""))}
                     className="p-2 bg-blue-600/20 hover:bg-blue-600/40 border border-blue-500/30 text-cyan-300 rounded-xl"
@@ -754,10 +758,10 @@ export default function LizyTradeEnterpriseApp() {
             </div>
           </div>
 
-          {/* Digit Heatmap */}
+          {/* Digit Distribution Heatmap */}
           <div className="bg-[#0a1128] border border-blue-900/40 rounded-3xl p-6 shadow-xl">
             <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2 mb-4">
-              <BarChart3 className="w-4 h-4 text-cyan-400" /> Digit Heatmap (0 - 9)
+              <BarChart3 className="w-4 h-4 text-cyan-400" /> Digit Distribution Heatmap (0 - 9)
             </h3>
             <div className="grid grid-cols-5 sm:grid-cols-10 gap-2">
               {Array.from({ length: 10 }).map((_, digit) => {

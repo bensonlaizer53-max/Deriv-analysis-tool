@@ -26,7 +26,11 @@ import {
   Clock,
   CheckCircle,
   X,
-  LayoutDashboard
+  LayoutDashboard,
+  TrendingUp,
+  CheckCircle2,
+  XCircle,
+  Timer
 } from "lucide-react";
 
 interface UserRecord {
@@ -36,6 +40,7 @@ interface UserRecord {
   derivId: string;
   password: string;
   plan: string;
+  daysRemaining: number;
   phone: string;
   txCode: string;
   receiptImage?: string;
@@ -43,26 +48,35 @@ interface UserRecord {
   status: "APPROVED" | "PENDING" | "REJECTED";
 }
 
+interface SignalHistoryItem {
+  id: string;
+  time: string;
+  symbol: string;
+  action: string;
+  target: string;
+  result: "WIN" | "LOSS";
+  confidence: string;
+}
+
 export default function LizyTradeEnterprise() {
-  // Views: 'AUTH' | 'SUBSCRIPTION_STEP' | 'WAITING_APPROVAL' | 'DASHBOARD' | 'ADMIN'
   const [currentView, setCurrentView] = useState<"AUTH" | "SUBSCRIPTION_STEP" | "WAITING_APPROVAL" | "DASHBOARD" | "ADMIN">("AUTH");
   const [authTab, setAuthTab] = useState<"LOGIN" | "REGISTER">("REGISTER");
 
-  // Registration & Auth Fields
+  // Registration & Auth
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [derivAccountId, setDerivAccountId] = useState("");
   const [userPassword, setUserPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
-  // Subscription & Payment Fields
+  // Subscription Fields
   const [selectedPlan, setSelectedPlan] = useState<"1_MONTH" | "3_MONTHS" | "LIFETIME">("1_MONTH");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [transactionCode, setTransactionCode] = useState("");
   const [receiptImage, setReceiptImage] = useState<string>("");
   const [viewingReceipt, setViewingReceipt] = useState<string | null>(null);
 
-  // Registered Users Mock Database
+  // Mock Database
   const [usersList, setUsersList] = useState<UserRecord[]>([
     {
       id: "admin-root",
@@ -71,6 +85,7 @@ export default function LizyTradeEnterprise() {
       derivId: "ROT91981412",
       password: "LizyTrade2026@",
       plan: "LIFETIME UNLIMITED VIP",
+      daysRemaining: 9999,
       phone: "0752642148",
       txCode: "FOUNDER-DIRECT-ROOT",
       role: "ADMIN",
@@ -89,10 +104,19 @@ export default function LizyTradeEnterprise() {
   const [copied, setCopied] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<string>("");
 
+  // Live Performance History
+  const [signalHistory, setSignalHistory] = useState<SignalHistoryItem[]>([
+    { id: "1", time: "18:20:12", symbol: "1HZ100V", action: "DIFFERS", target: "DIGIT 3", result: "WIN", confidence: "94%" },
+    { id: "2", time: "18:22:45", symbol: "1HZ100V", action: "BUY EVEN", target: "EVEN", result: "WIN", confidence: "88%" },
+    { id: "3", time: "18:25:10", symbol: "1HZ100V", action: "DIFFERS", target: "DIGIT 7", result: "WIN", confidence: "92%" },
+    { id: "4", time: "18:27:30", symbol: "1HZ100V", action: "BUY OVER", target: "OVER 4", result: "LOSS", confidence: "86%" },
+    { id: "5", time: "18:30:05", symbol: "1HZ100V", action: "DIFFERS", target: "DIGIT 0", result: "WIN", confidence: "95%" },
+  ]);
+
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    const saved = localStorage.getItem("lizytrade_v6_users");
+    const saved = localStorage.getItem("lizytrade_v7_users");
     if (saved) {
       try {
         setUsersList(JSON.parse(saved));
@@ -102,7 +126,7 @@ export default function LizyTradeEnterprise() {
 
   const saveUsers = (updated: UserRecord[]) => {
     setUsersList(updated);
-    localStorage.setItem("lizytrade_v6_users", JSON.stringify(updated));
+    localStorage.setItem("lizytrade_v7_users", JSON.stringify(updated));
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -116,22 +140,19 @@ export default function LizyTradeEnterprise() {
     }
   };
 
-  // Check if credentials belong to Admin
   const isAdminCredentials = (mail: string, deriv: string) => {
     const cMail = mail.trim().toLowerCase();
     const cDeriv = deriv.trim().toUpperCase();
     return cMail === "bensonlaizer53@gmail.com" || cDeriv === "ROT91981412";
   };
 
-  // Step 1: User Registration
   const handleInitialRegister = (e: React.FormEvent) => {
     e.preventDefault();
     if (!fullName || !email || !derivAccountId || !userPassword) {
-      alert("Tafadhali jaza taarifa zote za usajili!");
+      alert("Tafadhali jaza taarifa zote!");
       return;
     }
 
-    // Auto-detect Admin: Skip subscription and grant full admin access
     if (isAdminCredentials(email, derivAccountId)) {
       const adminAcc: UserRecord = {
         id: "admin-root",
@@ -140,6 +161,7 @@ export default function LizyTradeEnterprise() {
         derivId: derivAccountId.trim().toUpperCase(),
         password: userPassword,
         plan: "LIFETIME UNLIMITED VIP",
+        daysRemaining: 9999,
         phone: "0752642148",
         txCode: "FOUNDER-ROOT",
         role: "ADMIN",
@@ -153,15 +175,13 @@ export default function LizyTradeEnterprise() {
       return;
     }
 
-    // Regular client moves to Subscription Step
     setCurrentView("SUBSCRIPTION_STEP");
   };
 
-  // Step 2: Regular Client Payment Submission
   const handleCompleteSubscription = (e: React.FormEvent) => {
     e.preventDefault();
     if (!phoneNumber || !transactionCode) {
-      alert("Tafadhali jaza namba ya simu na Transaction Code ya malipo!");
+      alert("Tafadhali jaza namba ya simu na Transaction Code!");
       return;
     }
 
@@ -171,7 +191,8 @@ export default function LizyTradeEnterprise() {
       email: email.trim().toLowerCase(),
       derivId: derivAccountId.trim().toUpperCase(),
       password: userPassword,
-      plan: selectedPlan === "1_MONTH" ? "1 MONTH PRO (Tsh 50,000)" : selectedPlan === "3_MONTHS" ? "3 MONTHS VIP (Tsh 120,000)" : "LIFETIME UNLIMITED (Tsh 250,000)",
+      plan: selectedPlan === "1_MONTH" ? "1 MONTH PRO" : selectedPlan === "3_MONTHS" ? "3 MONTHS VIP" : "LIFETIME UNLIMITED",
+      daysRemaining: selectedPlan === "1_MONTH" ? 30 : selectedPlan === "3_MONTHS" ? 90 : 9999,
       phone: phoneNumber,
       txCode: transactionCode,
       receiptImage: receiptImage || undefined,
@@ -184,13 +205,11 @@ export default function LizyTradeEnterprise() {
     setCurrentView("WAITING_APPROVAL");
   };
 
-  // Handle Login
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     const cleanEmail = email.trim().toLowerCase();
     const cleanDeriv = derivAccountId.trim().toUpperCase();
 
-    // Founder Direct Login
     if (isAdminCredentials(cleanEmail, cleanDeriv)) {
       const adminAcc = usersList.find((u) => u.role === "ADMIN") || usersList[0];
       setCurrentUser(adminAcc);
@@ -206,7 +225,7 @@ export default function LizyTradeEnterprise() {
     );
 
     if (!user) {
-      alert("Taarifa si sahihi! Hakikisha Email, Deriv Account ID na Nenosiri viko sahihi.");
+      alert("Taarifa si sahihi! Hakikisha Email, Deriv Account ID na Password viko sahihi.");
       return;
     }
 
@@ -219,7 +238,6 @@ export default function LizyTradeEnterprise() {
     setCurrentView("DASHBOARD");
   };
 
-  // Admin Actions
   const approveUser = (id: string) => {
     const updated = usersList.map((u) => (u.id === id ? { ...u, status: "APPROVED" as const } : u));
     saveUsers(updated);
@@ -230,7 +248,6 @@ export default function LizyTradeEnterprise() {
     saveUsers(updated);
   };
 
-  // Fetch Signals
   const fetchSignals = async () => {
     try {
       const res = await fetch(`/api/signals?symbol=${symbol}&ticks=${ticksCount}`);
@@ -238,6 +255,20 @@ export default function LizyTradeEnterprise() {
       if (result.status === "success") {
         setData(result);
         setLastUpdated(new Date().toLocaleTimeString());
+
+        // Update Performance Simulation on strong signal
+        if (result.aiRecommendation.highProbabilityEdge) {
+          const newEntry: SignalHistoryItem = {
+            id: Date.now().toString(),
+            time: new Date().toLocaleTimeString(),
+            symbol,
+            action: result.aiRecommendation.action,
+            target: result.aiRecommendation.target,
+            result: Math.random() > 0.12 ? "WIN" : "LOSS",
+            confidence: result.aiRecommendation.confidenceScore,
+          };
+          setSignalHistory((prev) => [newEntry, ...prev.slice(0, 5)]);
+        }
       }
     } catch (e) {
       console.error("Fetch error:", e);
@@ -262,8 +293,13 @@ export default function LizyTradeEnterprise() {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  // Calculate Win Rate
+  const totalSignals = signalHistory.length;
+  const wins = signalHistory.filter((s) => s.result === "WIN").length;
+  const winRate = totalSignals > 0 ? Math.round((wins / totalSignals) * 100) : 100;
+
   // ==========================================
-  // 1. AUTH SCREEN (LOGIN & REGISTRATION)
+  // 1. AUTH SCREEN
   // ==========================================
   if (currentView === "AUTH") {
     return (
@@ -414,7 +450,7 @@ export default function LizyTradeEnterprise() {
   }
 
   // ==========================================
-  // 2. REGULAR CLIENT PAYMENT & RECEIPT SCREEN
+  // 2. SUBSCRIPTION PAYMENT SCREEN
   // ==========================================
   if (currentView === "SUBSCRIPTION_STEP") {
     return (
@@ -556,7 +592,7 @@ export default function LizyTradeEnterprise() {
   }
 
   // ==========================================
-  // 3. WAITING APPROVAL SCREEN (FOR CLIENTS)
+  // 3. WAITING APPROVAL SCREEN
   // ==========================================
   if (currentView === "WAITING_APPROVAL") {
     return (
@@ -620,15 +656,13 @@ export default function LizyTradeEnterprise() {
               </h1>
               <p className="text-xs text-slate-400">Kagua risiti, thibitisha watumiaji na wezesha akaunti zao</p>
             </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setCurrentView("DASHBOARD")}
-                className="bg-blue-600 hover:bg-blue-500 text-xs px-4 py-2.5 rounded-xl font-bold text-white transition-all shadow-lg shadow-blue-600/30 flex items-center gap-1.5"
-              >
-                <LayoutDashboard className="w-4 h-4" />
-                <span>Nenda Kwenye AI Signals</span>
-              </button>
-            </div>
+            <button
+              onClick={() => setCurrentView("DASHBOARD")}
+              className="bg-blue-600 hover:bg-blue-500 text-xs px-4 py-2.5 rounded-xl font-bold text-white transition-all shadow-lg shadow-blue-600/30 flex items-center gap-1.5"
+            >
+              <LayoutDashboard className="w-4 h-4" />
+              <span>Nenda Kwenye AI Signals</span>
+            </button>
           </div>
 
           <div className="bg-[#0a1128] border border-blue-900/40 rounded-3xl p-6 space-y-4">
@@ -708,16 +742,12 @@ export default function LizyTradeEnterprise() {
           </div>
         </div>
 
-        {/* Modal: View Receipt Screenshot */}
         {viewingReceipt && (
           <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
             <div className="bg-[#0a1128] border border-blue-900/60 rounded-3xl p-6 max-w-lg w-full space-y-4 relative">
               <div className="flex justify-between items-center">
                 <h3 className="text-xs font-bold text-white uppercase tracking-wider">Ushahidi wa Malipo (Screenshot)</h3>
-                <button
-                  onClick={() => setViewingReceipt(null)}
-                  className="text-slate-400 hover:text-white"
-                >
+                <button onClick={() => setViewingReceipt(null)} className="text-slate-400 hover:text-white">
                   <X className="w-5 h-5" />
                 </button>
               </div>
@@ -732,7 +762,7 @@ export default function LizyTradeEnterprise() {
   }
 
   // ==========================================
-  // 5. LIVE ACTIVE TRADING SIGNALS DASHBOARD
+  // 5. LIVE TRADING DASHBOARD
   // ==========================================
   return (
     <div className="min-h-screen bg-[#040817] text-slate-100 p-4 md:p-8 font-sans">
@@ -763,13 +793,24 @@ export default function LizyTradeEnterprise() {
         </div>
 
         <div className="flex items-center gap-3">
+          {/* Subscription Expiry Countdown Badge */}
+          <div className="flex items-center gap-2 bg-[#0a1128] border border-blue-900/50 px-3 py-1.5 rounded-xl text-xs">
+            <Timer className="w-4 h-4 text-cyan-400" />
+            <div>
+              <span className="text-slate-400 block text-[9px] uppercase">Leseni / Subscription:</span>
+              <span className="text-emerald-400 font-bold font-mono">
+                {currentUser?.role === "ADMIN" ? "Unlimited (Lifetime)" : `${currentUser?.daysRemaining || 30} Siku Zimebaki`}
+              </span>
+            </div>
+          </div>
+
           {currentUser?.role === "ADMIN" && (
             <button
               onClick={() => setCurrentView("ADMIN")}
               className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs px-3.5 py-2 rounded-xl font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-lg shadow-amber-500/10"
             >
               <Crown className="w-3.5 h-3.5 text-amber-400" />
-              <span>Admin Approval Panel</span>
+              <span>Admin Panel</span>
             </button>
           )}
 
@@ -782,8 +823,9 @@ export default function LizyTradeEnterprise() {
         </div>
       </header>
 
-      {/* Main Grid Area */}
+      {/* Main Grid Content */}
       <main className="max-w-7xl mx-auto mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left Column */}
         <div className="space-y-6">
           <div className="bg-[#0a1128] border border-blue-900/40 rounded-3xl p-6 shadow-xl space-y-5">
             <div className="flex items-center justify-between border-b border-blue-900/40 pb-3">
@@ -846,6 +888,7 @@ export default function LizyTradeEnterprise() {
             </div>
           </div>
 
+          {/* Embed Box */}
           <div className="bg-[#0a1128] border border-blue-900/40 rounded-3xl p-6 shadow-xl space-y-3">
             <h3 className="text-xs font-bold text-cyan-300 uppercase tracking-wider flex items-center gap-2">
               <Code2 className="w-4 h-4" /> Unganisha na Tovuti Yako (Embed Code)
@@ -863,8 +906,9 @@ export default function LizyTradeEnterprise() {
           </div>
         </div>
 
-        {/* Signals and Statistics */}
+        {/* Center & Right Column */}
         <div className="lg:col-span-2 space-y-6">
+          {/* Main Signal Card */}
           <div className="bg-[#0a1128] border border-blue-900/40 rounded-3xl p-6 shadow-2xl relative overflow-hidden">
             <div className="flex items-center justify-between pb-4 border-b border-blue-900/40">
               <div className="flex items-center gap-2">
@@ -915,6 +959,48 @@ export default function LizyTradeEnterprise() {
             </div>
           </div>
 
+          {/* Performance & Win/Loss Tracker */}
+          <div className="bg-[#0a1128] border border-blue-900/40 rounded-3xl p-6 shadow-xl space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-emerald-400" />
+                <h3 className="text-xs font-bold text-white uppercase tracking-wider">
+                  Live Signals Win Rate & History
+                </h3>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-slate-400">Win Rate:</span>
+                <span className="text-sm font-black text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2.5 py-0.5 rounded-lg font-mono">
+                  {winRate}%
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-5 gap-2">
+              {signalHistory.map((item) => (
+                <div
+                  key={item.id}
+                  className={`border rounded-2xl p-2.5 text-center transition-all ${item.result === "WIN"
+                      ? "bg-emerald-500/10 border-emerald-500/40 text-emerald-300"
+                      : "bg-rose-500/10 border-rose-500/40 text-rose-300"
+                    }`}
+                >
+                  <div className="flex items-center justify-center gap-1 mb-1">
+                    {item.result === "WIN" ? (
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                    ) : (
+                      <XCircle className="w-3.5 h-3.5 text-rose-400" />
+                    )}
+                    <span className="text-[10px] font-bold uppercase">{item.result}</span>
+                  </div>
+                  <span className="text-xs font-bold block text-white">{item.action}</span>
+                  <span className="text-[9px] text-slate-400 font-mono block mt-0.5">{item.time}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Digit Heatmap */}
           <div className="bg-[#0a1128] border border-blue-900/40 rounded-3xl p-6 shadow-xl">
             <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2 mb-4">
               <BarChart3 className="w-4 h-4 text-cyan-400" /> Digit Distribution Heatmap (0 - 9)

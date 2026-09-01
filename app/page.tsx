@@ -16,16 +16,15 @@ import {
   CreditCard,
   Volume2,
   VolumeX,
-  ExternalLink,
   MessageCircle,
   PhoneCall,
   Users,
   Code2,
-  KeyRound,
   Eye,
   EyeOff,
   Crown,
-  Wallet
+  ArrowRight,
+  ArrowLeft
 } from "lucide-react";
 
 interface UserRecord {
@@ -41,24 +40,24 @@ interface UserRecord {
   status: "APPROVED" | "PENDING" | "REJECTED";
 }
 
-export default function EnterpriseProApp() {
-  const [currentView, setCurrentView] = useState<"PORTAL" | "DASHBOARD" | "ADMIN">("PORTAL");
-  const [authMode, setAuthMode] = useState<"LOGIN" | "REGISTER">("LOGIN");
+export default function LizyTradeEnterprise() {
+  // Views: 'AUTH' | 'SUBSCRIPTION_STEP' | 'DASHBOARD' | 'ADMIN'
+  const [currentView, setCurrentView] = useState<"AUTH" | "SUBSCRIPTION_STEP" | "DASHBOARD" | "ADMIN">("AUTH");
+  const [authTab, setAuthTab] = useState<"LOGIN" | "REGISTER">("LOGIN");
 
-  // Authentication Fields
+  // Form Fields
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("bensonlaizer53@gmail.com");
   const [derivAccountId, setDerivAccountId] = useState("ROT91981412");
   const [userPassword, setUserPassword] = useState("LizyTrade2026@");
-  const [phoneNumber, setPhoneNumber] = useState("0752642148");
-  const [selectedPlan, setSelectedPlan] = useState<"1_MONTH" | "3_MONTHS" | "LIFETIME">("LIFETIME");
-  const [transactionCode, setTransactionCode] = useState("TX-VIP-DIRECT");
   const [showPassword, setShowPassword] = useState(false);
 
-  // Active Session
-  const [currentUser, setCurrentUser] = useState<UserRecord | null>(null);
+  // Payment Step Fields
+  const [selectedPlan, setSelectedPlan] = useState<"1_MONTH" | "3_MONTHS" | "LIFETIME">("1_MONTH");
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [transactionCode, setTransactionCode] = useState("");
 
-  // Registered Users Mock Database
+  // Registered Users State
   const [usersList, setUsersList] = useState<UserRecord[]>([
     {
       id: "admin-root",
@@ -74,7 +73,9 @@ export default function EnterpriseProApp() {
     }
   ]);
 
-  // Live Trading Engine States
+  const [currentUser, setCurrentUser] = useState<UserRecord | null>(null);
+
+  // Engine States
   const [symbol, setSymbol] = useState("1HZ100V");
   const [ticksCount, setTicksCount] = useState(100);
   const [autoRefresh, setAutoRefresh] = useState(true);
@@ -85,9 +86,8 @@ export default function EnterpriseProApp() {
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Load / Save Local Storage
   useEffect(() => {
-    const saved = localStorage.getItem("lizytrade_v3_users");
+    const saved = localStorage.getItem("lizytrade_v4_users");
     if (saved) {
       try {
         setUsersList(JSON.parse(saved));
@@ -97,20 +97,30 @@ export default function EnterpriseProApp() {
 
   const saveUsers = (updated: UserRecord[]) => {
     setUsersList(updated);
-    localStorage.setItem("lizytrade_v3_users", JSON.stringify(updated));
+    localStorage.setItem("lizytrade_v4_users", JSON.stringify(updated));
   };
 
-  // User Registration Handler
-  const handleRegister = (e: React.FormEvent) => {
+  // Step 1: Handle User Registration (moves to Subscription Screen)
+  const handleInitialRegister = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !derivAccountId || !phoneNumber || !transactionCode || !userPassword) {
-      alert("Tafadhali jaza sehemu zote kikamilifu!");
+    if (!fullName || !email || !derivAccountId || !userPassword) {
+      alert("Tafadhali jaza taarifa zote za usajili!");
+      return;
+    }
+    setCurrentView("SUBSCRIPTION_STEP");
+  };
+
+  // Step 2: Finalize Payment Submission
+  const handleCompleteSubscription = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!phoneNumber || !transactionCode) {
+      alert("Tafadhali jaza namba ya simu na Transaction Code ya malipo!");
       return;
     }
 
     const newUser: UserRecord = {
       id: Date.now().toString(),
-      name: fullName || email.split("@")[0],
+      name: fullName,
       email: email.trim().toLowerCase(),
       derivId: derivAccountId.trim().toUpperCase(),
       password: userPassword,
@@ -123,17 +133,18 @@ export default function EnterpriseProApp() {
 
     const updated = [...usersList, newUser];
     saveUsers(updated);
-    alert("Usajili wako umepokelewa! Subiri Admin athibitishe malipo au wasiliana naye WhatsApp kwa uthibitisho wa haraka.");
-    setAuthMode("LOGIN");
+    alert("Usajili na malipo vimewasilishwa! Wasiliana na Admin kupitia WhatsApp (0628 940 590) ili kuidhinishwa.");
+    setAuthTab("LOGIN");
+    setCurrentView("AUTH");
   };
 
-  // User & Admin Login Handler (Triple Verification: Email + Deriv ID + Password)
+  // Handle Login
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     const cleanEmail = email.trim().toLowerCase();
     const cleanDeriv = derivAccountId.trim().toUpperCase();
 
-    // Auto-authenticate Founder
+    // Founder direct login
     if (
       (cleanEmail === "bensonlaizer53@gmail.com" || cleanDeriv === "ROT91981412") &&
       userPassword === "LizyTrade2026@"
@@ -152,12 +163,12 @@ export default function EnterpriseProApp() {
     );
 
     if (!user) {
-      alert("Taarifa si sahihi! Hakikisha Email, Deriv Account ID na Nenosiri vinalingana.");
+      alert("Taarifa si sahihi! Hakikisha Email, Deriv Account ID na Password viko sahihi.");
       return;
     }
 
     if (user.status !== "APPROVED") {
-      alert("Akaunti yako bado inasubiri uhakiki wa malipo (PENDING). Wasiliana na Admin kupitia WhatsApp: 0628 940 590");
+      alert("Akaunti yako ipo 'PENDING APPROVAL'. Tafadhali subiri Admin athibitishe malipo yako au tuma ujumbe WhatsApp.");
       return;
     }
 
@@ -165,7 +176,7 @@ export default function EnterpriseProApp() {
     setCurrentView("DASHBOARD");
   };
 
-  // Admin Approval Functions
+  // Admin approvals
   const approveUser = (id: string) => {
     const updated = usersList.map((u) => (u.id === id ? { ...u, status: "APPROVED" as const } : u));
     saveUsers(updated);
@@ -176,7 +187,7 @@ export default function EnterpriseProApp() {
     saveUsers(updated);
   };
 
-  // Live Trading Engine Fetcher
+  // Signal Engine Fetch
   const fetchSignals = async () => {
     try {
       const res = await fetch(`/api/signals?symbol=${symbol}&ticks=${ticksCount}`);
@@ -186,7 +197,7 @@ export default function EnterpriseProApp() {
         setLastUpdated(new Date().toLocaleTimeString());
       }
     } catch (e) {
-      console.error("Signal fetch error:", e);
+      console.error("Fetch error:", e);
     }
   };
 
@@ -209,7 +220,271 @@ export default function EnterpriseProApp() {
   };
 
   // ==========================================
-  // VIEW 1: ADMIN CONTROL PANEL
+  // 1. AUTH SCREEN (LOGIN & INITIAL REGISTER)
+  // ==========================================
+  if (currentView === "AUTH") {
+    return (
+      <div className="min-h-screen bg-[#040817] bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(37,99,235,0.25),rgba(255,255,255,0))] text-slate-100 flex items-center justify-center p-4 font-sans">
+        <div className="w-full max-w-md bg-[#0a1128]/95 border border-blue-900/50 backdrop-blur-xl rounded-3xl p-8 shadow-2xl space-y-6">
+          <div className="text-center space-y-2">
+            <div className="inline-flex p-3 bg-blue-600/20 border border-blue-500/40 rounded-2xl text-cyan-400">
+              <Zap className="w-8 h-8" />
+            </div>
+            <h1 className="text-2xl font-black tracking-tight text-white">LizyTrade AI Signal Pro</h1>
+            <p className="text-xs text-slate-400">Uchambuzi wa Kiwango cha Juu kwa Bots za LizyTrade</p>
+          </div>
+
+          <div className="flex bg-[#040817] p-1 rounded-2xl border border-blue-900/40">
+            <button
+              onClick={() => setAuthTab("LOGIN")}
+              className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all ${authTab === "LOGIN" ? "bg-blue-600 text-white shadow-lg shadow-blue-600/20" : "text-slate-400 hover:text-white"
+                }`}
+            >
+              Ingia (Login)
+            </button>
+            <button
+              onClick={() => setAuthTab("REGISTER")}
+              className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all ${authTab === "REGISTER" ? "bg-blue-600 text-white shadow-lg shadow-blue-600/20" : "text-slate-400 hover:text-white"
+                }`}
+            >
+              Jisajili (Register)
+            </button>
+          </div>
+
+          {authTab === "LOGIN" ? (
+            <form onSubmit={handleLogin} className="space-y-4">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">Email:</label>
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="bensonlaizer53@gmail.com"
+                  className="w-full bg-[#040817] border border-blue-900/60 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-400 font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">Deriv Account ID:</label>
+                <input
+                  type="text"
+                  required
+                  value={derivAccountId}
+                  onChange={(e) => setDerivAccountId(e.target.value)}
+                  placeholder="mfano: ROT91981412 au CR..."
+                  className="w-full bg-[#040817] border border-blue-900/60 rounded-xl px-4 py-2.5 text-xs text-cyan-300 font-bold uppercase focus:outline-none focus:border-cyan-400 font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">Nenosiri (Password):</label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    required
+                    value={userPassword}
+                    onChange={(e) => setUserPassword(e.target.value)}
+                    placeholder="Weka password yako"
+                    className="w-full bg-[#040817] border border-blue-900/60 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-400 font-mono"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-2.5 text-slate-400 hover:text-white"
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold py-3.5 rounded-xl text-xs uppercase tracking-wider transition-all shadow-lg shadow-emerald-500/20 active:scale-[0.98] mt-2 cursor-pointer flex items-center justify-center gap-2"
+              >
+                <Lock className="w-4 h-4" />
+                <span>Ingia Kwenye Dashibodi</span>
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={handleInitialRegister} className="space-y-4">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">Jina Kamili:</label>
+                <input
+                  type="text"
+                  required
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  placeholder="Rashid Ally"
+                  className="w-full bg-[#040817] border border-blue-900/60 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-400"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">Barua Pepe (Email):</label>
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="rashid@example.com"
+                  className="w-full bg-[#040817] border border-blue-900/60 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-400 font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">Deriv Account ID:</label>
+                <input
+                  type="text"
+                  required
+                  value={derivAccountId}
+                  onChange={(e) => setDerivAccountId(e.target.value)}
+                  placeholder="mfano: ROT91981412 au CR..."
+                  className="w-full bg-[#040817] border border-blue-900/60 rounded-xl px-4 py-2.5 text-xs text-cyan-300 font-bold uppercase focus:outline-none focus:border-cyan-400 font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">Tengeneza Nenosiri (Password):</label>
+                <input
+                  type="password"
+                  required
+                  value={userPassword}
+                  onChange={(e) => setUserPassword(e.target.value)}
+                  placeholder="Weka password salama"
+                  className="w-full bg-[#040817] border border-blue-900/60 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-400 font-mono"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="w-full bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white font-bold py-3.5 rounded-xl text-xs uppercase tracking-wider transition-all shadow-lg shadow-cyan-500/20 active:scale-[0.98] mt-2 cursor-pointer flex items-center justify-center gap-2"
+              >
+                <span>Endelea Kwenye Subscription & Malipo</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </form>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ==========================================
+  // 2. SUBSCRIPTION & PAYMENT SELECTION SCREEN
+  // ==========================================
+  if (currentView === "SUBSCRIPTION_STEP") {
+    return (
+      <div className="min-h-screen bg-[#040817] text-slate-100 p-4 md:p-8 font-sans flex items-center justify-center">
+        <div className="w-full max-w-2xl bg-[#0a1128] border border-blue-900/50 rounded-3xl p-6 md:p-8 shadow-2xl space-y-6">
+          <div className="flex items-center justify-between pb-4 border-b border-blue-900/40">
+            <button
+              onClick={() => setCurrentView("AUTH")}
+              className="text-xs text-slate-400 hover:text-white flex items-center gap-1.5 transition-all"
+            >
+              <ArrowLeft className="w-4 h-4" /> Rudi Nyuma
+            </button>
+            <span className="text-xs font-bold text-cyan-400 uppercase tracking-wider">Hatua ya 2/2: Malipo</span>
+          </div>
+
+          <div>
+            <h2 className="text-lg font-black text-white">Chagua Kifurushi cha Subscription</h2>
+            <p className="text-xs text-slate-400">Lipia kifurushi ili uwezeshwe kupokea AI signals na kuunganisha na bots zako.</p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div
+              onClick={() => setSelectedPlan("1_MONTH")}
+              className={`p-4 rounded-2xl border cursor-pointer transition-all ${selectedPlan === "1_MONTH" ? "bg-blue-600/20 border-cyan-400 text-white" : "bg-[#040817] border-blue-900/30 text-slate-400"
+                }`}
+            >
+              <span className="text-xs font-bold block text-white">1 Month Pro</span>
+              <span className="text-base font-black text-emerald-400 font-mono block mt-1">Tsh 50,000</span>
+              <span className="text-[10px] text-slate-400 mt-2 block">Upatikanaji wa Signals</span>
+            </div>
+
+            <div
+              onClick={() => setSelectedPlan("3_MONTHS")}
+              className={`p-4 rounded-2xl border cursor-pointer transition-all ${selectedPlan === "3_MONTHS" ? "bg-blue-600/20 border-cyan-400 text-white" : "bg-[#040817] border-blue-900/30 text-slate-400"
+                }`}
+            >
+              <span className="text-xs font-bold block text-white">3 Months VIP</span>
+              <span className="text-base font-black text-emerald-400 font-mono block mt-1">Tsh 120,000</span>
+              <span className="text-[10px] text-slate-400 mt-2 block">Signals + VIP Support</span>
+            </div>
+
+            <div
+              onClick={() => setSelectedPlan("LIFETIME")}
+              className={`p-4 rounded-2xl border cursor-pointer transition-all ${selectedPlan === "LIFETIME" ? "bg-blue-600/20 border-cyan-400 text-white" : "bg-[#040817] border-blue-900/30 text-slate-400"
+                }`}
+            >
+              <span className="text-xs font-bold block text-white">Lifetime VIP</span>
+              <span className="text-base font-black text-emerald-400 font-mono block mt-1">Tsh 250,000</span>
+              <span className="text-[10px] text-slate-400 mt-2 block">Direct Embed & API Access</span>
+            </div>
+          </div>
+
+          <div className="bg-[#040817] border border-blue-900/50 rounded-2xl p-4 space-y-2 text-xs">
+            <div className="flex justify-between items-center">
+              <span className="text-slate-400">Namba ya Malipo (M-Pesa):</span>
+              <span className="font-mono font-black text-cyan-300 text-sm tracking-wider">0752 642 148</span>
+            </div>
+            <div className="flex justify-between items-center pt-2 border-t border-blue-900/30">
+              <span className="text-slate-400">Jina la Usajili:</span>
+              <span className="font-bold text-white uppercase">BENSON LAIZER MKAINE</span>
+            </div>
+          </div>
+
+          <form onSubmit={handleCompleteSubscription} className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">Namba ya Simu Uliyotuma Malipo:</label>
+                <input
+                  type="text"
+                  required
+                  value={phoneNumber}
+                  onChange={(e) => setPhoneNumber(e.target.value)}
+                  placeholder="0755..."
+                  className="w-full bg-[#040817] border border-blue-900/60 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-400 font-mono"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">Transaction ID / Code (M-Pesa):</label>
+                <input
+                  type="text"
+                  required
+                  value={transactionCode}
+                  onChange={(e) => setTransactionCode(e.target.value)}
+                  placeholder="Mfano: QRT88921"
+                  className="w-full bg-[#040817] border border-blue-900/60 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-400 font-mono uppercase"
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold py-3.5 rounded-xl text-xs uppercase tracking-wider transition-all shadow-lg shadow-emerald-500/20 active:scale-[0.98] cursor-pointer"
+            >
+              Kamilisha & Tuma Taarifa za Malipo
+            </button>
+          </form>
+
+          <a
+            href="https://wa.me/255628940590?text=Habari%20LizyTrade,%20nimekamilisha%20malipo%20ya%20subscription%20ya%20AI%20Signals."
+            target="_blank"
+            rel="noreferrer"
+            className="w-full bg-emerald-600/10 hover:bg-emerald-600/20 border border-emerald-500/30 text-emerald-300 py-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer"
+          >
+            <MessageCircle className="w-4 h-4 text-emerald-400" />
+            <span>WhatsApp: 0628 940 590 (Thibitisha Malipo)</span>
+          </a>
+        </div>
+      </div>
+    );
+  }
+
+  // ==========================================
+  // 3. ADMIN PANEL
   // ==========================================
   if (currentView === "ADMIN") {
     return (
@@ -299,278 +574,7 @@ export default function EnterpriseProApp() {
   }
 
   // ==========================================
-  // VIEW 2: PROFESSIONAL AUTH & SUBSCRIPTION PORTAL
-  // ==========================================
-  if (currentView === "PORTAL") {
-    return (
-      <div className="min-h-screen bg-[#040817] bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(37,99,235,0.25),rgba(255,255,255,0))] text-slate-100 p-4 md:p-8 font-sans flex flex-col justify-between">
-        <div className="max-w-4xl mx-auto w-full my-auto py-6">
-          {/* Header */}
-          <div className="text-center space-y-3 mb-8">
-            <div className="inline-flex p-3.5 bg-gradient-to-br from-blue-600/30 to-cyan-500/20 border border-cyan-500/40 rounded-3xl text-cyan-400 shadow-xl shadow-cyan-500/10">
-              <Zap className="w-9 h-9" />
-            </div>
-            <h1 className="text-3xl md:text-4xl font-black tracking-tight text-white">
-              LizyTrade AI Signal Pro
-            </h1>
-            <p className="text-xs md:text-sm text-slate-400 max-w-xl mx-auto">
-              Mfumo Mahiri wa Uchambuzi wa Namba za Synthetic Indices kwa Bots za LizyTrade na Tovuti Binafsi.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-            {/* Left: Subscription Tiers & Payment Gateways */}
-            <div className="lg:col-span-5 bg-[#0a1128] border border-blue-900/40 rounded-3xl p-6 shadow-2xl space-y-6">
-              <div>
-                <h3 className="text-xs font-black text-cyan-400 uppercase tracking-wider flex items-center gap-2">
-                  <CreditCard className="w-4 h-4" /> Vifurushi vya Subscription
-                </h3>
-                <div className="mt-3 space-y-2.5">
-                  <div
-                    onClick={() => setSelectedPlan("1_MONTH")}
-                    className={`p-3.5 rounded-2xl border cursor-pointer transition-all flex items-center justify-between ${selectedPlan === "1_MONTH" ? "bg-blue-600/20 border-cyan-400 text-white" : "bg-[#040817] border-blue-900/30 text-slate-400"
-                      }`}
-                  >
-                    <div>
-                      <span className="font-bold text-xs block text-white">1 Month Pro License</span>
-                      <span className="text-[10px] text-slate-400">Signals + Deriv Account Support</span>
-                    </div>
-                    <span className="text-xs font-black text-emerald-400 font-mono">Tsh 50,000</span>
-                  </div>
-
-                  <div
-                    onClick={() => setSelectedPlan("3_MONTHS")}
-                    className={`p-3.5 rounded-2xl border cursor-pointer transition-all flex items-center justify-between ${selectedPlan === "3_MONTHS" ? "bg-blue-600/20 border-cyan-400 text-white" : "bg-[#040817] border-blue-900/30 text-slate-400"
-                      }`}
-                  >
-                    <div>
-                      <span className="font-bold text-xs block text-white">3 Months VIP Access</span>
-                      <span className="text-[10px] text-slate-400">High Speed Signals + VIP Support</span>
-                    </div>
-                    <span className="text-xs font-black text-emerald-400 font-mono">Tsh 120,000</span>
-                  </div>
-
-                  <div
-                    onClick={() => setSelectedPlan("LIFETIME")}
-                    className={`p-3.5 rounded-2xl border cursor-pointer transition-all flex items-center justify-between ${selectedPlan === "LIFETIME" ? "bg-blue-600/20 border-cyan-400 text-white" : "bg-[#040817] border-blue-900/30 text-slate-400"
-                      }`}
-                  >
-                    <div>
-                      <span className="font-bold text-xs block text-white">Lifetime Unlimited VIP</span>
-                      <span className="text-[10px] text-slate-400">Direct API Embed + Site Integration</span>
-                    </div>
-                    <span className="text-xs font-black text-emerald-400 font-mono">Tsh 250,000</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Exact Payment Channels */}
-              <div className="pt-4 border-t border-blue-900/40 space-y-3">
-                <h3 className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-2">
-                  <PhoneCall className="w-4 h-4 text-emerald-400" /> Njia za Malipo (Tanzania):
-                </h3>
-
-                <div className="bg-[#040817] border border-blue-900/50 rounded-2xl p-4 space-y-2 text-xs">
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-400">Namba ya Malipo (M-Pesa):</span>
-                    <span className="font-mono font-black text-cyan-300 text-sm tracking-wider">0752 642 148</span>
-                  </div>
-                  <div className="flex justify-between items-center pt-2 border-t border-blue-900/30">
-                    <span className="text-slate-400">Jina la Usajili:</span>
-                    <span className="font-bold text-white uppercase tracking-tight">BENSON LAIZER MKAINE</span>
-                  </div>
-                </div>
-
-                <a
-                  href="https://wa.me/255628940590?text=Habari%20LizyTrade,%20nimekamilisha%20malipo%20ya%20subscription%20ya%20AI%20Signals."
-                  target="_blank"
-                  rel="noreferrer"
-                  className="w-full bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 py-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-emerald-500/10"
-                >
-                  <MessageCircle className="w-4 h-4 text-emerald-400" />
-                  <span>WhatsApp: 0628 940 590 (Thibitisha Malipo)</span>
-                </a>
-              </div>
-            </div>
-
-            {/* Right: Triple-Verification Auth Form */}
-            <div className="lg:col-span-7 bg-[#0a1128] border border-blue-900/40 rounded-3xl p-6 md:p-8 shadow-2xl space-y-6">
-              <div className="flex bg-[#040817] p-1 rounded-2xl border border-blue-900/40">
-                <button
-                  onClick={() => setAuthMode("LOGIN")}
-                  className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all ${authMode === "LOGIN" ? "bg-blue-600 text-white shadow-lg shadow-blue-600/20" : "text-slate-400 hover:text-white"
-                    }`}
-                >
-                  Ingia (Login)
-                </button>
-                <button
-                  onClick={() => setAuthMode("REGISTER")}
-                  className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all ${authMode === "REGISTER" ? "bg-blue-600 text-white shadow-lg shadow-blue-600/20" : "text-slate-400 hover:text-white"
-                    }`}
-                >
-                  Jisajili & Lipia
-                </button>
-              </div>
-
-              {authMode === "LOGIN" ? (
-                <form onSubmit={handleLogin} className="space-y-4">
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">
-                      1. Barua Pepe (Email):
-                    </label>
-                    <input
-                      type="email"
-                      required
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="bensonlaizer53@gmail.com"
-                      className="w-full bg-[#040817] border border-blue-900/50 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-400 font-mono"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">
-                      2. Deriv Account ID (Kama inavyoonekana juu kulia):
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={derivAccountId}
-                      onChange={(e) => setDerivAccountId(e.target.value)}
-                      placeholder="mfano: ROT91981412 au CR..."
-                      className="w-full bg-[#040817] border border-blue-900/50 rounded-xl px-4 py-2.5 text-xs text-cyan-300 font-bold uppercase focus:outline-none focus:border-cyan-400 font-mono"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">
-                      3. Nenosiri (Password):
-                    </label>
-                    <div className="relative">
-                      <input
-                        type={showPassword ? "text" : "password"}
-                        required
-                        value={userPassword}
-                        onChange={(e) => setUserPassword(e.target.value)}
-                        placeholder="Weka nenosiri lako"
-                        className="w-full bg-[#040817] border border-blue-900/50 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-400 font-mono"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-2.5 text-slate-400 hover:text-white"
-                      >
-                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    </div>
-                  </div>
-
-                  <button
-                    type="submit"
-                    className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold py-3.5 rounded-xl text-xs uppercase tracking-wider transition-all shadow-lg shadow-emerald-500/20 active:scale-[0.98] mt-2 cursor-pointer flex items-center justify-center gap-2"
-                  >
-                    <Lock className="w-4 h-4" />
-                    <span>Fungua AI Trading Tool</span>
-                  </button>
-                </form>
-              ) : (
-                <form onSubmit={handleRegister} className="space-y-3.5">
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">Jina Kamili:</label>
-                    <input
-                      type="text"
-                      required
-                      value={fullName}
-                      onChange={(e) => setFullName(e.target.value)}
-                      placeholder="Benson Ally"
-                      className="w-full bg-[#040817] border border-blue-900/50 rounded-xl px-4 py-2 text-xs text-white focus:outline-none focus:border-cyan-400 font-sans"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">Email:</label>
-                      <input
-                        type="email"
-                        required
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        placeholder="user@example.com"
-                        className="w-full bg-[#040817] border border-blue-900/50 rounded-xl px-4 py-2 text-xs text-white focus:outline-none focus:border-cyan-400 font-mono"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">Deriv Account ID:</label>
-                      <input
-                        type="text"
-                        required
-                        value={derivAccountId}
-                        onChange={(e) => setDerivAccountId(e.target.value)}
-                        placeholder="ROT91981412"
-                        className="w-full bg-[#040817] border border-blue-900/50 rounded-xl px-4 py-2 text-xs text-white focus:outline-none focus:border-cyan-400 font-mono uppercase"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">Tengeneza Nenosiri:</label>
-                    <input
-                      type="password"
-                      required
-                      value={userPassword}
-                      onChange={(e) => setUserPassword(e.target.value)}
-                      placeholder="Nenosiri imara"
-                      className="w-full bg-[#040817] border border-blue-900/50 rounded-xl px-4 py-2 text-xs text-white focus:outline-none focus:border-cyan-400 font-mono"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">Simu ya Malipo:</label>
-                      <input
-                        type="text"
-                        required
-                        value={phoneNumber}
-                        onChange={(e) => setPhoneNumber(e.target.value)}
-                        placeholder="0755..."
-                        className="w-full bg-[#040817] border border-blue-900/50 rounded-xl px-4 py-2 text-xs text-white focus:outline-none focus:border-cyan-400 font-mono"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">Transaction ID (M-Pesa):</label>
-                      <input
-                        type="text"
-                        required
-                        value={transactionCode}
-                        onChange={(e) => setTransactionCode(e.target.value)}
-                        placeholder="QRT88921"
-                        className="w-full bg-[#040817] border border-blue-900/50 rounded-xl px-4 py-2 text-xs text-white focus:outline-none focus:border-cyan-400 font-mono uppercase"
-                      />
-                    </div>
-                  </div>
-
-                  <button
-                    type="submit"
-                    className="w-full bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white font-bold py-3.5 rounded-xl text-xs uppercase tracking-wider transition-all shadow-lg shadow-cyan-500/20 active:scale-[0.98] mt-2 cursor-pointer"
-                  >
-                    Kamilisha Usajili
-                  </button>
-                </form>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <footer className="max-w-4xl mx-auto w-full pt-4 border-t border-blue-900/40 flex justify-between items-center text-[11px] text-slate-500">
-          <span>&copy; 2026 LizyTrade Pro AI. All Rights Reserved.</span>
-          <span className="text-slate-400">Enterprise AI Grade</span>
-        </footer>
-      </div>
-    );
-  }
-
-  // ==========================================
-  // VIEW 3: LIVE ACTIVE DASHBOARD (FOUNDER / USER)
+  // 4. LIVE ACTIVE DASHBOARD
   // ==========================================
   return (
     <div className="min-h-screen bg-[#040817] text-slate-100 p-4 md:p-8 font-sans">
@@ -595,7 +599,7 @@ export default function EnterpriseProApp() {
               )}
             </div>
             <p className="text-xs text-slate-400 mt-0.5">
-              Akaunti: <strong className="text-white font-bold">{currentUser?.name}</strong> | Deriv Account ID: <strong className="text-cyan-400 font-mono">{currentUser?.derivId}</strong>
+              Mtumiaji: <strong className="text-white font-bold">{currentUser?.name}</strong> | Deriv Account ID: <strong className="text-cyan-400 font-mono">{currentUser?.derivId}</strong>
             </p>
           </div>
         </div>
@@ -612,7 +616,7 @@ export default function EnterpriseProApp() {
           )}
 
           <button
-            onClick={() => setCurrentView("PORTAL")}
+            onClick={() => setCurrentView("AUTH")}
             className="text-xs text-rose-400 hover:text-rose-300 bg-rose-500/10 px-3.5 py-2 rounded-xl border border-rose-500/20 font-bold transition-all"
           >
             Toka
@@ -620,9 +624,8 @@ export default function EnterpriseProApp() {
         </div>
       </header>
 
-      {/* Main Grid Content */}
+      {/* Main Trading Area */}
       <main className="max-w-7xl mx-auto mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column: Controls & Integration */}
         <div className="space-y-6">
           <div className="bg-[#0a1128] border border-blue-900/40 rounded-3xl p-6 shadow-xl space-y-5">
             <div className="flex items-center justify-between border-b border-blue-900/40 pb-3">
@@ -685,14 +688,10 @@ export default function EnterpriseProApp() {
             </div>
           </div>
 
-          {/* Third-Party Site Embed / Integration Box */}
           <div className="bg-[#0a1128] border border-blue-900/40 rounded-3xl p-6 shadow-xl space-y-3">
             <h3 className="text-xs font-bold text-cyan-300 uppercase tracking-wider flex items-center gap-2">
-              <Code2 className="w-4 h-4" /> Unganisha na Tovuti Yako (Embed / API)
+              <Code2 className="w-4 h-4" /> Unganisha na Tovuti Yako (Embed Code)
             </h3>
-            <p className="text-[11px] text-slate-400 leading-relaxed">
-              Mteja au mmiliki anaweza kuweka chati na signals hizi kwenye tovuti yake yoyote kwa Iframe hii:
-            </p>
             <div className="bg-[#040817] border border-blue-900/60 rounded-xl p-3 text-[10px] font-mono text-cyan-400 break-all select-all">
               {`<iframe src="https://deriv-analysis-tool-psi.vercel.app" width="100%" height="750px" frameborder="0"></iframe>`}
             </div>
@@ -706,7 +705,7 @@ export default function EnterpriseProApp() {
           </div>
         </div>
 
-        {/* Right Columns: AI Predictions & Heatmap */}
+        {/* Signals and Statistics */}
         <div className="lg:col-span-2 space-y-6">
           <div className="bg-[#0a1128] border border-blue-900/40 rounded-3xl p-6 shadow-2xl relative overflow-hidden">
             <div className="flex items-center justify-between pb-4 border-b border-blue-900/40">
@@ -758,7 +757,6 @@ export default function EnterpriseProApp() {
             </div>
           </div>
 
-          {/* Digit Distribution Heatmap */}
           <div className="bg-[#0a1128] border border-blue-900/40 rounded-3xl p-6 shadow-xl">
             <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2 mb-4">
               <BarChart3 className="w-4 h-4 text-cyan-400" /> Digit Distribution Heatmap (0 - 9)

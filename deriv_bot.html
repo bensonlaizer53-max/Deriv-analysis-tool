@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="sw">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>LizyTrade Live Bot Runner</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            background: #070d1e;
+            color: #fff;
+            padding: 20px;
+        }
+
+        .card {
+            background: #0d1838;
+            border: 1px solid #152454;
+            border-radius: 16px;
+            padding: 20px;
+            max-width: 600px;
+            margin: 0 auto;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        }
+
+        h2 {
+            color: #22d3ee;
+            margin-top: 0;
+        }
+
+        input,
+        select,
+        button {
+            width: 100%;
+            padding: 12px;
+            margin-top: 8px;
+            margin-bottom: 12px;
+            border-radius: 8px;
+            border: 1px solid #152454;
+            background: #070d1e;
+            color: #fff;
+            box-sizing: border-box;
+        }
+
+        button {
+            background: #2563eb;
+            color: #fff;
+            font-weight: bold;
+            cursor: pointer;
+            border: none;
+            transition: 0.2s;
+        }
+
+        button:hover {
+            background: #1d4ed8;
+        }
+
+        .stop-btn {
+            background: #e11d48;
+            display: none;
+        }
+
+        .stop-btn:hover {
+            background: #be123c;
+        }
+
+        .log-box {
+            background: #000;
+            color: #10b981;
+            font-family: monospace;
+            font-size: 11px;
+            padding: 12px;
+            border-radius: 8px;
+            height: 220px;
+            overflow-y: auto;
+            line-height: 1.5;
+            border: 1px solid #152454;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="card">
+        <h2>🤖 LizyTrade Live Bot Runner</h2>
+        <p style="font-size: 12px; color: #94a3b8;">Bot hii inasoma signals moja kwa moja kutoka kwenye Analysis Tool
+            yako na kuingiza oda Deriv.</p>
+
+        <label style="font-size: 12px;">1. Deriv API Token Yako:</label>
+        <input type="text" id="derivToken" placeholder="Weka Deriv API Token hapa..." />
+
+        <label style="font-size: 12px;">2. Email Yako ya Usajili:</label>
+        <input type="email" id="userEmail" value="bensonlaizer53@gmail.com" />
+
+        <label style="font-size: 12px;">3. Stake Amount ($ USD):</label>
+        <input type="number" id="stakeAmount" value="1" min="0.35" step="0.1" />
+
+        <button id="startBtn" onclick="startBot()">ANZA KUKIMBIZA BOT (START BOT)</button>
+        <button id="stopBtn" class="stop-btn" onclick="stopBot()">SIMAMISHA BOT (STOP)</button>
+
+        <div style="font-size: 11px; margin-top: 10px; color: #94a3b8;">Live Bot Logs:</div>
+        <div class="log-box" id="logBox">Tayari kuanza... Weka token kisha bonyeza Start.<br /></div>
+    </div>
+
+    <script>
+        let socket = null;
+        let timer = null;
+        let isTrading = false;
+
+        function log(msg, color = "#10b981") {
+            const box = document.getElementById("logBox");
+            box.innerHTML += `<span style="color:${color}">[${new Date().toLocaleTimeString()}] ${msg}</span><br/>`;
+            box.scrollTop = box.scrollHeight;
+        }
+
+        function startBot() {
+            const token = document.getElementById("derivToken").value.trim();
+            const email = document.getElementById("userEmail").value.trim();
+
+            if (!token) {
+                alert("Tafadhali weka Deriv API Token kwanza!");
+                return;
+            }
+
+            log("Inaunganisha na WebSocket ya Deriv...", "#38bdf8");
+
+            // Tumia appId 1089 kwa ajili ya public API connection
+            socket = new WebSocket("wss://ws.derivws.com/websockets/v3?app_id=1089");
+
+            socket.onopen = () => {
+                log("WebSocket Imeunganishwa! Inatuma Token kwa uthibitisho...", "#38bdf8");
+                socket.send(JSON.stringify({ authorize: token }));
+            };
+
+            socket.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+
+                if (data.msg_type === "authorize") {
+                    log(`✅ Akaunti Imethibitishwa! Jina: ${data.authorize.fullname || data.authorize.email} | Salio: ${data.authorize.balance} ${data.authorize.currency}`, "#22c55e");
+                    document.getElementById("startBtn").style.display = "none";
+                    document.getElementById("stopBtn").style.display = "block";
+
+                    // Anza kuita API ya Signals kila sekunde 1
+                    timer = setInterval(() => checkSignalAndTrade(email), 1000);
+                }
+
+                if (data.msg_type === "buy") {
+                    log(`🚀 Trade Imefunguliwa! Contract ID: ${data.buy.contract_id} | Bei ya Stake: $${data.buy.buy_price}`, "#eab308");
+                    setTimeout(() => { isTrading = false; }, 3500);
+                }
+
+                if (data.error) {
+                    log(`❌ Kosa kutoka Deriv: ${data.error.message}`, "#f43f5e");
+                    isTrading = false;
+                }
+            };
+
+            socket.onerror = (err) => {
+                log("❌ Hitilafu: Imeshindwa kuunganisha na seva za Deriv. Hakikisha una intaneti.", "#f43f5e");
+            };
+
+            socket.onclose = () => {
+                log("⚠️ Muunganisho wa Deriv umefungwa.", "#94a3b8");
+            };
+        }
+
+        async function checkSignalAndTrade(email) {
+            if (isTrading) return;
+
+            try {
+                const res = await fetch(`http://localhost:3000/api/signals?email=${encodeURIComponent(email)}&symbol=1HZ100V&ticks=100`);
+                const resData = await res.json();
+
+                if (resData.status === "success") {
+                    const rec = resData.aiRecommendation;
+
+                    // Ikiwa kuna High Probability Edge (Mfano DIFFERS au EVEN/ODD yenye nguvu)
+                    if (rec.highProbabilityEdge) {
+                        log(`🎯 Signal Kali: ${rec.action} | Target: ${rec.target} | Confidence: ${rec.confidenceScore}`, "#38bdf8");
+
+                        if (rec.action === "DIFFERS") {
+                            const digit = rec.target.replace("DIGIT ", "");
+                            placeOrder("DIGITDIFF", digit);
+                        } else if (rec.action === "BUY EVEN") {
+                            placeOrder("DIGITEVEN");
+                        } else if (rec.action === "BUY ODD") {
+                            placeOrder("DIGITODD");
+                        }
+                    }
+                }
+            } catch (e) {
+                log(`⚠️ Hitilafu ya kuita Local API: Hakikisha 'npm run dev' inakimbia kwenye port 3000.`, "#f43f5e");
+            }
+        }
+
+        function placeOrder(contractType, barrier) {
+            isTrading = true;
+            const stake = parseFloat(document.getElementById("stakeAmount").value) || 1;
+            log(`Inatuma ombi la kununua ${contractType} (Stake: $${stake})...`, "#eab308");
+
+            const req = {
+                buy: 1,
+                price: stake,
+                parameters: {
+                    amount: stake,
+                    basis: "stake",
+                    contract_type: contractType,
+                    currency: "USD",
+                    duration: 1,
+                    duration_unit: "t",
+                    symbol: "1HZ100V"
+                }
+            };
+
+            if (barrier !== undefined) req.parameters.barrier = barrier;
+            socket.send(JSON.stringify(req));
+        }
+
+        function stopBot() {
+            if (timer) clearInterval(timer);
+            if (socket) socket.close();
+            document.getElementById("startBtn").style.display = "block";
+            document.getElementById("stopBtn").style.display = "none";
+            log("🛑 Bot imesimamishwa.", "#f43f5e");
+        }
+    </script>
+</body>
+
+</html>

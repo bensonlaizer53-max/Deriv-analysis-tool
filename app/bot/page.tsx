@@ -1,15 +1,16 @@
 "use client";
 
-import React, { useState, useRef } from "react";
-import { Play, Square, Bot, ShieldCheck } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import { Play, Square, Bot, ShieldCheck, LogIn, LogOut } from "lucide-react";
 
 export default function BotRunnerPage() {
     const [token, setToken] = useState("");
+    const [account, setAccount] = useState<{ loginid: string; balance: string; currency: string } | null>(null);
     const [email, setEmail] = useState("bensonlaizer53@gmail.com");
     const [stake, setStake] = useState("1");
     const [isRunning, setIsRunning] = useState(false);
     const [logs, setLogs] = useState<string[]>([
-        "Mfumo upo tayari. Weka API Token yako kisha bonyeza Start.",
+        "Mfumo upo tayari mtandaoni. Bonyeza 'Login with Deriv' kuanza.",
     ]);
 
     const socketRef = useRef<WebSocket | null>(null);
@@ -21,25 +22,57 @@ export default function BotRunnerPage() {
         setLogs((prev) => [...prev, `[${time}] ${msg}`]);
     };
 
-    const startBot = () => {
-        const cleanToken = token.trim();
+    // Soma token moja kwa moja kutoka URL baada ya Deriv Login redirection
+    useEffect(() => {
+        if (typeof window !== "undefined") {
+            const urlParams = new URLSearchParams(window.location.search);
+            const token1 = urlParams.get("token1");
+            const acct1 = urlParams.get("acct1");
 
-        if (!cleanToken) {
-            alert("Tafadhali weka Deriv API Token!");
+            const savedToken = token1 || localStorage.getItem("deriv_token");
+            if (savedToken) {
+                setToken(savedToken);
+                localStorage.setItem("deriv_token", savedToken);
+                addLog(`Token imethibitishwa: ${acct1 || "Deriv Account"}`);
+                // Safisha URL
+                window.history.replaceState({}, document.title, window.location.pathname);
+            }
+        }
+    }, []);
+
+    // Kuingia Moja kwa Moja (OAuth2 Login) kwa kutumia App ID ya LizyTrade Bot
+    const handleDerivLogin = () => {
+        const appId = "34hmklbjf67yxiGS5XAsf";
+        const redirectUrl = encodeURIComponent("https://deriv-analysis-tool-psi.vercel.app/bot");
+        window.location.href = `https://oauth.deriv.com/oauth2/authorize?app_id=${appId}&l=en&brand=deriv&redirect_uri=${redirectUrl}`;
+    };
+
+    const handleLogout = () => {
+        stopBot();
+        localStorage.removeItem("deriv_token");
+        setToken("");
+        setAccount(null);
+        addLog("Umetoka kwenye akaunti ya Deriv.");
+    };
+
+    const startBot = () => {
+        const activeToken = token.trim();
+
+        if (!activeToken) {
+            alert("Tafadhali bonyeza 'Login with Deriv' kwanza!");
             return;
         }
 
-        addLog("Inaunganisha na Seva za Deriv kupitia Lizytrade App ID...");
+        addLog("Inaunganisha na Seva za Deriv WebSocket...");
         setIsRunning(true);
 
         try {
-            // Unganisha kupitia App ID ya Lizytrade iliyosajiliwa
-            const ws = new WebSocket("wss://ws.derivws.com/websockets/v3?app_id=33YjPz08n06J8kkkGxz3T");
+            const ws = new WebSocket("wss://ws.derivws.com/websockets/v3?app_id=1089");
             socketRef.current = ws;
 
             ws.onopen = () => {
-                addLog("WebSocket Imeunganishwa! Inatuma Token kwa uthibitisho...");
-                ws.send(JSON.stringify({ authorize: cleanToken }));
+                addLog("WebSocket Imeunganishwa! Inathibitisha akaunti...");
+                ws.send(JSON.stringify({ authorize: activeToken }));
             };
 
             ws.onmessage = (event) => {
@@ -48,12 +81,17 @@ export default function BotRunnerPage() {
 
                     if (data.msg_type === "authorize" && data.authorize) {
                         const auth = data.authorize;
-                        const userDisplay = auth.fullname || auth.email || auth.loginid || "Trader";
                         const balanceVal = auth.balance !== undefined ? `${auth.balance} ${auth.currency}` : "Active";
 
-                        addLog(`✅ Akaunti Imethibitishwa: ${userDisplay} | Salio: ${balanceVal}`);
+                        setAccount({
+                            loginid: auth.loginid,
+                            balance: auth.balance,
+                            currency: auth.currency,
+                        });
 
-                        // Anza kuita API ya Signals kila sekunde 1
+                        addLog(`✅ Akaunti Imethibitishwa: ${auth.fullname || auth.loginid} | Salio: ${balanceVal}`);
+
+                        // Anza kuangalia Signals kila sekunde 1
                         if (timerRef.current) clearInterval(timerRef.current);
                         timerRef.current = setInterval(() => {
                             checkSignalsAndTrade();
@@ -61,9 +99,7 @@ export default function BotRunnerPage() {
                     }
 
                     if (data.msg_type === "buy" && data.buy) {
-                        addLog(
-                            `🚀 Trade Imefunguliwa! Contract ID: ${data.buy.contract_id} (Stake: $${data.buy.buy_price})`
-                        );
+                        addLog(`🚀 Trade Imefunguliwa! Contract ID: ${data.buy.contract_id} (Stake: $${data.buy.buy_price})`);
                         setTimeout(() => {
                             isTradingRef.current = false;
                         }, 3500);
@@ -74,7 +110,7 @@ export default function BotRunnerPage() {
                         isTradingRef.current = false;
                     }
                 } catch {
-                    // Log parsing handling
+                    // Parsing handling
                 }
             };
 
@@ -105,9 +141,7 @@ export default function BotRunnerPage() {
                 const rec = resData.aiRecommendation;
 
                 if (rec.highProbabilityEdge) {
-                    addLog(
-                        `🎯 Signal: ${rec.action} | Target: ${rec.target} | Confidence: ${rec.confidenceScore}`
-                    );
+                    addLog(`🎯 Signal: ${rec.action} | Target: ${rec.target} | Confidence: ${rec.confidenceScore}`);
 
                     if (rec.action === "DIFFERS") {
                         const digit = rec.target.replace("DIGIT ", "");
@@ -120,7 +154,7 @@ export default function BotRunnerPage() {
                 }
             }
         } catch {
-            // Signal API failure
+            // API error
         }
     };
 
@@ -138,7 +172,7 @@ export default function BotRunnerPage() {
                 amount: stakeAmount,
                 basis: "stake",
                 contract_type: contractType,
-                currency: "USD",
+                currency: account?.currency || "USD",
                 duration: 1,
                 duration_unit: "t",
                 symbol: "1HZ100V",
@@ -167,38 +201,53 @@ export default function BotRunnerPage() {
     return (
         <div className="min-h-screen bg-[#070d1e] text-slate-100 p-4 md:p-8 flex items-center justify-center font-sans">
             <div className="w-full max-w-xl bg-[#0d1838] border border-[#152454] rounded-3xl p-6 md:p-8 shadow-2xl space-y-6">
-                <div className="flex items-center gap-3 pb-4 border-b border-[#152454]">
-                    <div className="p-3 bg-blue-600/20 border border-blue-500/40 rounded-2xl text-cyan-400">
-                        <Bot className="w-7 h-7" />
-                    </div>
-                    <div>
-                        <h1 className="text-xl font-black text-white">LizyTrade Auto Bot Runner</h1>
-                        <p className="text-xs text-slate-400 flex items-center gap-1.5 mt-0.5">
-                            <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                            Lizytrade App ID & Live Signals
-                        </p>
+                <div className="flex items-center justify-between pb-4 border-b border-[#152454]">
+                    <div className="flex items-center gap-3">
+                        <div className="p-3 bg-blue-600/20 border border-blue-500/40 rounded-2xl text-cyan-400">
+                            <Bot className="w-7 h-7" />
+                        </div>
+                        <div>
+                            <h1 className="text-xl font-black text-white">LizyTrade Auto Bot Runner</h1>
+                            <p className="text-xs text-slate-400 flex items-center gap-1.5 mt-0.5">
+                                <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                                Live Cloud App ID Verified
+                            </p>
+                        </div>
                     </div>
                 </div>
 
                 <div className="space-y-4">
-                    <div>
-                        <label className="block text-xs font-semibold uppercase text-slate-300 mb-1">
-                            1. Deriv API Token:
-                        </label>
-                        <input
-                            type="text"
-                            disabled={isRunning}
-                            value={token}
-                            onChange={(e) => setToken(e.target.value)}
-                            placeholder="Weka Token yako ya Deriv hapa..."
-                            className="w-full bg-[#070d1e] border border-[#152454] rounded-xl px-4 py-3 text-xs text-cyan-400 focus:outline-none focus:border-cyan-400 font-mono"
-                        />
-                    </div>
+                    {!token ? (
+                        <button
+                            onClick={handleDerivLogin}
+                            className="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-3.5 rounded-xl text-xs font-black transition-all shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2 cursor-pointer active:scale-95 uppercase tracking-wide"
+                        >
+                            <LogIn className="w-4 h-4" />
+                            <span>BONYEZA HAPA KUINGIA NA DERIV (ONE-CLICK LOGIN)</span>
+                        </button>
+                    ) : (
+                        <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-3 flex items-center justify-between">
+                            <div className="text-xs">
+                                <span className="text-emerald-400 font-bold block">Akaunti Imeunganishwa</span>
+                                <span className="text-[11px] text-slate-300 font-mono">
+                                    {account ? `${account.loginid} ($${account.balance})` : "Tayari kuanza biashara"}
+                                </span>
+                            </div>
+                            <button
+                                onClick={handleLogout}
+                                disabled={isRunning}
+                                className="text-xs text-rose-400 hover:text-rose-300 flex items-center gap-1 cursor-pointer bg-rose-500/10 px-2.5 py-1.5 rounded-lg border border-rose-500/20"
+                            >
+                                <LogOut className="w-3.5 h-3.5" />
+                                <span>Ondoa</span>
+                            </button>
+                        </div>
+                    )}
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                             <label className="block text-xs font-semibold uppercase text-slate-300 mb-1">
-                                2. Email ya Usajili:
+                                Email ya Usajili:
                             </label>
                             <input
                                 type="email"
@@ -210,7 +259,7 @@ export default function BotRunnerPage() {
                         </div>
                         <div>
                             <label className="block text-xs font-semibold uppercase text-slate-300 mb-1">
-                                3. Stake ($ USD):
+                                Stake ($ USD):
                             </label>
                             <input
                                 type="number"

@@ -19,10 +19,11 @@ import {
   ExternalLink,
   MessageCircle,
   PhoneCall,
-  Key,
   Users,
   Code2,
-  HelpCircle
+  KeyRound,
+  Eye,
+  EyeOff
 } from "lucide-react";
 
 interface UserRecord {
@@ -30,57 +31,46 @@ interface UserRecord {
   name: string;
   email: string;
   derivId: string;
+  password: string;
   plan: string;
   phone: string;
   txCode: string;
   status: "APPROVED" | "PENDING" | "REJECTED";
-  apiKey: string;
 }
 
-export default function EnterpriseApp() {
-  // Tab Management: 'USER_PORTAL' | 'DASHBOARD' | 'ADMIN_PORTAL'
+export default function LizyTradeEnterpriseApp() {
   const [currentView, setCurrentView] = useState<"PORTAL" | "DASHBOARD" | "ADMIN">("PORTAL");
   const [authMode, setAuthMode] = useState<"LOGIN" | "REGISTER">("REGISTER");
 
-  // Registration & Payment States
+  // Registration & Login Form States
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [derivAccountId, setDerivAccountId] = useState("");
+  const [userPassword, setUserPassword] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [selectedPlan, setSelectedPlan] = useState<"1_MONTH" | "3_MONTHS" | "LIFETIME">("1_MONTH");
   const [transactionCode, setTransactionCode] = useState("");
-  const [enteredApiKey, setEnteredApiKey] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
-  // Logged-in Session Info
+  // Active Session
   const [currentUser, setCurrentUser] = useState<UserRecord | null>(null);
 
   // Admin Credentials
   const [adminPassword, setAdminPassword] = useState("");
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
 
-  // Registered Users Mock Database
+  // Local Storage Database for Users
   const [usersList, setUsersList] = useState<UserRecord[]>([
     {
       id: "1",
       name: "Benson Mkaine (Founder)",
       email: "bensonlaizer53@gmail.com",
       derivId: "CR9182345",
+      password: "admin",
       plan: "LIFETIME VIP",
-      phone: "+255 700 000 000",
-      txCode: "TXN-ADMIN-01",
+      phone: "0752642148",
+      txCode: "FOUNDER-DIRECT",
       status: "APPROVED",
-      apiKey: "LZ-VIP-889977",
-    },
-    {
-      id: "2",
-      name: "Rashid Ally",
-      email: "rashid@example.com",
-      derivId: "CR4452109",
-      plan: "1 MONTH PRO",
-      phone: "+255 765 123 456",
-      txCode: "MPESA993821",
-      status: "PENDING",
-      apiKey: "LZ-PENDING-445",
     }
   ]);
 
@@ -95,49 +85,66 @@ export default function EnterpriseApp() {
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Admin Master Key
   const ADMIN_PASS_KEY = "LizyTradeAdmin2026@";
 
-  // Handle User Registration
+  // Load saved users from LocalStorage on first render
+  useEffect(() => {
+    const saved = localStorage.getItem("lizytrade_registered_users");
+    if (saved) {
+      try {
+        setUsersList(JSON.parse(saved));
+      } catch { }
+    }
+  }, []);
+
+  const saveUsersToStorage = (users: UserRecord[]) => {
+    setUsersList(users);
+    localStorage.setItem("lizytrade_registered_users", JSON.stringify(users));
+  };
+
+  // User Registration
   const handleRegister = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !derivAccountId || !phoneNumber || !transactionCode) {
-      alert("Tafadhali jaza sehemu zote na uweke Transaction Code ya malipo!");
+    if (!email || !derivAccountId || !phoneNumber || !transactionCode || !userPassword) {
+      alert("Tafadhali jaza sehemu zote kikamilifu!");
       return;
     }
 
-    const generatedKey = `LZ-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
     const newUser: UserRecord = {
       id: Date.now().toString(),
       name: fullName || email.split("@")[0],
       email,
       derivId: derivAccountId,
+      password: userPassword,
       plan: selectedPlan === "1_MONTH" ? "1 MONTH PRO (Tsh 50,000)" : selectedPlan === "3_MONTHS" ? "3 MONTHS VIP (Tsh 120,000)" : "LIFETIME UNLIMITED (Tsh 250,000)",
       phone: phoneNumber,
       txCode: transactionCode,
       status: "PENDING",
-      apiKey: generatedKey,
     };
 
-    setUsersList((prev) => [...prev, newUser]);
-    alert("Usajili wako umepokelewa! Subiri Admin athibitishe malipo yako, au wasiliana naye kupitia WhatsApp kwa uthibitisho wa haraka.");
+    const updated = [...usersList, newUser];
+    saveUsersToStorage(updated);
+    alert("Usajili wako umepokelewa kwa mafanikio! Tafadhali subiri Admin athibitishe malipo yako au wasiliana naye kupitia WhatsApp ili akaunti iwashwe.");
     setAuthMode("LOGIN");
   };
 
-  // Handle User Login
+  // User Password Login
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     const user = usersList.find(
-      (u) => (u.email.toLowerCase() === email.toLowerCase() || u.derivId.toLowerCase() === derivAccountId.toLowerCase()) && (u.apiKey === enteredApiKey || enteredApiKey === "LZ-VIP-889977")
+      (u) =>
+        (u.email.toLowerCase() === email.toLowerCase() ||
+          u.derivId.toLowerCase() === derivAccountId.toLowerCase()) &&
+        u.password === userPassword
     );
 
     if (!user) {
-      alert("Taarifa si sahihi! Hakikisha umeingiza Email, Deriv ID, au Access Key sahihi.");
+      alert("Email/Deriv ID au Nenosiri (Password) si sahihi! Hakikisha umejisajili kwanza.");
       return;
     }
 
     if (user.status !== "APPROVED") {
-      alert("Akaunti yako bado ipo 'PENDING APPROVAL'. Tafadhali subiri Admin athibitishe malipo yako au tuma ujumbe WhatsApp.");
+      alert("Akaunti yako bado ipo 'PENDING APPROVAL'. Tafadhali wasiliana na Admin kupitia WhatsApp kuthibitisha malipo.");
       return;
     }
 
@@ -145,7 +152,7 @@ export default function EnterpriseApp() {
     setCurrentView("DASHBOARD");
   };
 
-  // Admin Actions
+  // Admin Handlers
   const handleAdminAuth = (e: React.FormEvent) => {
     e.preventDefault();
     if (adminPassword === ADMIN_PASS_KEY) {
@@ -156,23 +163,19 @@ export default function EnterpriseApp() {
   };
 
   const approveUser = (id: string) => {
-    setUsersList((prev) =>
-      prev.map((u) => (u.id === id ? { ...u, status: "APPROVED" } : u))
-    );
+    const updated = usersList.map((u) => (u.id === id ? { ...u, status: "APPROVED" as const } : u));
+    saveUsersToStorage(updated);
   };
 
   const rejectUser = (id: string) => {
-    setUsersList((prev) =>
-      prev.map((u) => (u.id === id ? { ...u, status: "REJECTED" } : u))
-    );
+    const updated = usersList.map((u) => (u.id === id ? { ...u, status: "REJECTED" as const } : u));
+    saveUsersToStorage(updated);
   };
 
-  // Live Signals Fetching
+  // Live Signals API
   const fetchSignals = async () => {
     try {
-      const res = await fetch(
-        `/api/signals?symbol=${symbol}&ticks=${ticksCount}`
-      );
+      const res = await fetch(`/api/signals?symbol=${symbol}&ticks=${ticksCount}`);
       const result = await res.json();
       if (result.status === "success") {
         setData(result);
@@ -214,7 +217,7 @@ export default function EnterpriseApp() {
                 <ShieldCheck className="w-7 h-7 text-cyan-400" />
                 LizyTrade Admin Approval Portal
               </h1>
-              <p className="text-xs text-slate-400">Dhibiti malipo, thibitisha watumiaji na toa leseni za API</p>
+              <p className="text-xs text-slate-400">Dhibiti malipo, thibitisha watumiaji na wezesha akaunti zao</p>
             </div>
             <button
               onClick={() => setCurrentView("PORTAL")}
@@ -245,11 +248,9 @@ export default function EnterpriseApp() {
             </div>
           ) : (
             <div className="bg-[#0a1128] border border-blue-900/40 rounded-3xl p-6 space-y-4">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-sm font-bold uppercase tracking-wider text-cyan-400 flex items-center gap-2">
-                  <Users className="w-4 h-4" /> Maombi ya Usajili na Malipo ({usersList.length})
-                </h2>
-              </div>
+              <h2 className="text-sm font-bold uppercase tracking-wider text-cyan-400 flex items-center gap-2 mb-4">
+                <Users className="w-4 h-4" /> Orodha ya Watumiaji na Malipo ({usersList.length})
+              </h2>
 
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs border-collapse">
@@ -257,10 +258,10 @@ export default function EnterpriseApp() {
                     <tr className="border-b border-blue-900/40 text-slate-400 font-semibold uppercase text-[10px]">
                       <th className="py-3 px-3">Mtumiaji</th>
                       <th className="py-3 px-3">Deriv Account</th>
-                      <th className="py-3 px-3">Namba ya Simu</th>
+                      <th className="py-3 px-3">Simu ya Malipo</th>
                       <th className="py-3 px-3">Kifurushi</th>
                       <th className="py-3 px-3">Transaction Code</th>
-                      <th className="py-3 px-3">API License Key</th>
+                      <th className="py-3 px-3">Password</th>
                       <th className="py-3 px-3">Hali (Status)</th>
                       <th className="py-3 px-3 text-center">Hatua</th>
                     </tr>
@@ -276,7 +277,7 @@ export default function EnterpriseApp() {
                         <td className="py-3 px-3 text-slate-300">{user.phone}</td>
                         <td className="py-3 px-3 text-slate-300 font-sans text-[11px]">{user.plan}</td>
                         <td className="py-3 px-3 text-amber-400 font-bold">{user.txCode}</td>
-                        <td className="py-3 px-3 text-emerald-400">{user.apiKey}</td>
+                        <td className="py-3 px-3 text-slate-400">{user.password}</td>
                         <td className="py-3 px-3">
                           <span className={`px-2.5 py-1 rounded-full text-[9px] font-bold uppercase font-sans ${user.status === "APPROVED" ? "bg-emerald-500/20 text-emerald-400" : user.status === "PENDING" ? "bg-amber-500/20 text-amber-400" : "bg-rose-500/20 text-rose-400"
                             }`}>
@@ -314,7 +315,7 @@ export default function EnterpriseApp() {
   }
 
   // ==========================================
-  // VIEW 2: REGISTRATION & SUBSCRIPTION GATE
+  // VIEW 2: REGISTRATION & LOGIN PORTAL
   // ==========================================
   if (currentView === "PORTAL") {
     return (
@@ -334,7 +335,7 @@ export default function EnterpriseApp() {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-            {/* Left: Payment Channels & Subscription Pricing */}
+            {/* Left: Payment Info */}
             <div className="lg:col-span-5 bg-[#0a1128] border border-blue-900/40 rounded-3xl p-6 shadow-2xl space-y-6">
               <div>
                 <h3 className="text-xs font-black text-cyan-400 uppercase tracking-wider flex items-center gap-2">
@@ -379,36 +380,36 @@ export default function EnterpriseApp() {
                 </div>
               </div>
 
-              {/* Payment Methods Section */}
+              {/* Payment Details */}
               <div className="pt-4 border-t border-blue-900/40 space-y-3">
                 <h3 className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-2">
-                  <PhoneCall className="w-4 h-4 text-emerald-400" /> Njia za Malipo (Tanzania):
+                  <PhoneCall className="w-4 h-4 text-emerald-400" /> Njia za Malipo:
                 </h3>
 
                 <div className="bg-[#040817] border border-blue-900/50 rounded-2xl p-3.5 space-y-2 text-xs">
                   <div className="flex justify-between items-center">
-                    <span className="text-slate-400">M-Pesa / Tigo / Airtel:</span>
-                    <span className="font-mono font-bold text-white text-right">0755 833 392 / 0789 220 114</span>
+                    <span className="text-slate-400">Namba ya Malipo (M-Pesa):</span>
+                    <span className="font-mono font-black text-cyan-300 text-sm">0752 642 148</span>
                   </div>
                   <div className="flex justify-between items-center pt-1 border-t border-blue-900/30">
                     <span className="text-slate-400">Jina la Usajili:</span>
-                    <span className="font-bold text-cyan-400">BENSON LAIZER MKAINE</span>
+                    <span className="font-bold text-white uppercase">BENSON LAIZER MKAINE</span>
                   </div>
                 </div>
 
                 <a
-                  href="https://wa.me/255755833392?text=Habari%20LizyTrade,%20nimekamilisha%20malipo%20ya%20subscription%20ya%20AI%20Signals."
+                  href="https://wa.me/255628940590?text=Habari%20LizyTrade,%20nimekamilisha%20malipo%20ya%20subscription%20ya%20AI%20Signals."
                   target="_blank"
                   rel="noreferrer"
-                  className="w-full bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2"
+                  className="w-full bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 py-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-emerald-500/10"
                 >
                   <MessageCircle className="w-4 h-4 text-emerald-400" />
-                  <span>Wasiliana WhatsApp kwa Uthibitisho</span>
+                  <span>WhatsApp: 0628 940 590 (Thibitisha Malipo)</span>
                 </a>
               </div>
             </div>
 
-            {/* Right: Register or Login Forms */}
+            {/* Right: Auth Forms */}
             <div className="lg:col-span-7 bg-[#0a1128] border border-blue-900/40 rounded-3xl p-6 md:p-8 shadow-2xl space-y-6">
               <div className="flex bg-[#040817] p-1 rounded-2xl border border-blue-900/40">
                 <button
@@ -416,14 +417,14 @@ export default function EnterpriseApp() {
                   className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all ${authMode === "REGISTER" ? "bg-blue-600 text-white shadow-lg shadow-blue-600/20" : "text-slate-400 hover:text-white"
                     }`}
                 >
-                  Jisajili & Lipia Subscription
+                  1. Jisajili & Lipia
                 </button>
                 <button
                   onClick={() => setAuthMode("LOGIN")}
                   className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all ${authMode === "LOGIN" ? "bg-blue-600 text-white shadow-lg shadow-blue-600/20" : "text-slate-400 hover:text-white"
                     }`}
                 >
-                  Ingia (Ikiwa Umelipia)
+                  2. Ingia (Login kwa Password)
                 </button>
               </div>
 
@@ -436,7 +437,7 @@ export default function EnterpriseApp() {
                       required
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
-                      placeholder="Mfano: Benson Ally"
+                      placeholder="Mfano: Rashid Ally"
                       className="w-full bg-[#040817] border border-blue-900/50 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-400 font-sans"
                     />
                   </div>
@@ -463,6 +464,28 @@ export default function EnterpriseApp() {
                         placeholder="CR918234 / VRTC123"
                         className="w-full bg-[#040817] border border-blue-900/50 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-400 font-mono uppercase"
                       />
+                    </div>
+                  </div>
+
+                  {/* Password Creation */}
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">Tengeneza Nenosiri (Password):</label>
+                    <div className="relative">
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        required
+                        value={userPassword}
+                        onChange={(e) => setUserPassword(e.target.value)}
+                        placeholder="Weka password yako salama"
+                        className="w-full bg-[#040817] border border-blue-900/50 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-400 font-mono"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-2.5 text-slate-400 hover:text-white"
+                      >
+                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
                     </div>
                   </div>
 
@@ -493,43 +516,52 @@ export default function EnterpriseApp() {
 
                   <button
                     type="submit"
-                    className="w-full bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white font-bold py-3 rounded-xl text-xs uppercase tracking-wider transition-all shadow-lg shadow-cyan-500/20 active:scale-[0.98] mt-2 cursor-pointer"
+                    className="w-full bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white font-bold py-3.5 rounded-xl text-xs uppercase tracking-wider transition-all shadow-lg shadow-cyan-500/20 active:scale-[0.98] mt-2 cursor-pointer"
                   >
-                    Tuma Ombi la Usajili & Pata API License
+                    Tuma Ombi la Usajili
                   </button>
                 </form>
               ) : (
                 <form onSubmit={handleLogin} className="space-y-4">
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">Barua Pepe (Email) au Deriv ID:</label>
+                    <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">Email au Deriv Account ID:</label>
                     <input
                       type="text"
                       required
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="bensonlaizer53@gmail.com au CR9182345"
-                      className="w-full bg-[#040817] border border-blue-900/50 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-400 font-mono"
+                      className="w-full bg-[#040817] border border-blue-900/50 rounded-xl px-4 py-3 text-xs text-white focus:outline-none focus:border-cyan-400 font-mono"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">API License Key / Access Key:</label>
-                    <input
-                      type="text"
-                      required
-                      value={enteredApiKey}
-                      onChange={(e) => setEnteredApiKey(e.target.value)}
-                      placeholder="Weka Key (Mfano: LZ-VIP-889977)"
-                      className="w-full bg-[#040817] border border-blue-900/50 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-400 font-mono"
-                    />
+                    <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">Nenosiri (Password):</label>
+                    <div className="relative">
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        required
+                        value={userPassword}
+                        onChange={(e) => setUserPassword(e.target.value)}
+                        placeholder="Weka password yako"
+                        className="w-full bg-[#040817] border border-blue-900/50 rounded-xl px-4 py-3 text-xs text-white focus:outline-none focus:border-cyan-400 font-mono"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-3 text-slate-400 hover:text-white"
+                      >
+                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
                   </div>
 
                   <button
                     type="submit"
-                    className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold py-3 rounded-xl text-xs uppercase tracking-wider transition-all shadow-lg shadow-emerald-500/20 active:scale-[0.98] mt-2 cursor-pointer flex items-center justify-center gap-2"
+                    className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold py-3.5 rounded-xl text-xs uppercase tracking-wider transition-all shadow-lg shadow-emerald-500/20 active:scale-[0.98] mt-2 cursor-pointer flex items-center justify-center gap-2"
                   >
                     <Lock className="w-4 h-4" />
-                    <span>Fungua AI Trading Tool</span>
+                    <span>Ingia kwenye AI Trading Tool</span>
                   </button>
                 </form>
               )}
@@ -537,14 +569,14 @@ export default function EnterpriseApp() {
           </div>
         </div>
 
-        {/* Footer with Admin Shortcut */}
+        {/* Footer with Admin Panel Link */}
         <footer className="max-w-4xl mx-auto w-full pt-6 border-t border-blue-900/40 flex justify-between items-center text-[11px] text-slate-500">
           <span>&copy; 2026 LizyTrade Pro AI. All Rights Reserved.</span>
           <button
             onClick={() => setCurrentView("ADMIN")}
             className="text-slate-400 hover:text-cyan-400 font-bold transition-all"
           >
-            Admin Panel Login &rarr;
+            Admin Approval Panel &rarr;
           </button>
         </footer>
       </div>
@@ -571,30 +603,22 @@ export default function EnterpriseApp() {
               </span>
             </div>
             <p className="text-xs text-slate-400">
-              Imethibitishwa kwa Deriv Account: <strong className="text-cyan-400 font-mono">{currentUser?.derivId || "CR9182345"}</strong>
+              Mtumiaji: <strong className="text-white font-bold">{currentUser?.name || "Benson Mkaine"}</strong> | Deriv ID: <strong className="text-cyan-400 font-mono">{currentUser?.derivId || "CR9182345"}</strong>
             </p>
           </div>
         </div>
 
-        {/* User Card */}
-        <div className="flex items-center gap-3 bg-[#0a1128] border border-blue-900/40 px-4 py-2 rounded-2xl text-xs font-mono">
-          <Key className="w-4 h-4 text-cyan-400" />
-          <div>
-            <span className="text-[9px] text-slate-400 block uppercase">API License Key:</span>
-            <span className="text-white font-bold">{currentUser?.apiKey || "LZ-VIP-889977"}</span>
-          </div>
-          <button
-            onClick={() => setCurrentView("PORTAL")}
-            className="ml-3 text-[11px] text-rose-400 hover:text-rose-300 bg-rose-500/10 px-2.5 py-1.5 rounded-lg border border-rose-500/20"
-          >
-            Toka
-          </button>
-        </div>
+        <button
+          onClick={() => setCurrentView("PORTAL")}
+          className="text-xs text-rose-400 hover:text-rose-300 bg-rose-500/10 px-4 py-2 rounded-xl border border-rose-500/20 font-bold transition-all"
+        >
+          Toka Kwenye Akaunti
+        </button>
       </header>
 
-      {/* Main Grid */}
+      {/* Main Grid Content */}
       <main className="max-w-7xl mx-auto mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column: Controls & Integration Generator */}
+        {/* Left Column */}
         <div className="space-y-6">
           <div className="bg-[#0a1128] border border-blue-900/40 rounded-3xl p-6 shadow-xl space-y-5">
             <div className="flex items-center justify-between border-b border-blue-900/40 pb-3">
@@ -627,7 +651,7 @@ export default function EnterpriseApp() {
             </div>
 
             <div>
-              <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1.5">Ticks Sample:</label>
+              <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1.5">Ticks Window:</label>
               <div className="grid grid-cols-3 gap-2">
                 {[50, 100, 200].map((count) => (
                   <button
@@ -645,7 +669,7 @@ export default function EnterpriseApp() {
             </div>
 
             <div className="pt-2 border-t border-blue-900/40 flex items-center justify-between">
-              <span className="text-xs text-slate-300 font-medium">Real-Time Data Feed</span>
+              <span className="text-xs text-slate-300 font-medium">Auto Real-Time Feed</span>
               <button
                 onClick={() => setAutoRefresh(!autoRefresh)}
                 className={`px-3 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${autoRefresh ? "bg-emerald-500/20 text-emerald-400" : "bg-slate-800 text-slate-400"
@@ -663,13 +687,13 @@ export default function EnterpriseApp() {
               <Code2 className="w-4 h-4" /> Unganisha na Tovuti Yako (Embed / API)
             </h3>
             <p className="text-[11px] text-slate-400 leading-relaxed">
-              Mteja anaweza kuweka chati na signals hizi kwenye tovuti yake yoyote kwa kutumia Iframe hii:
+              Weka msimbo huu kwenye tovuti yako yoyote ili tool hii ionekane na kutoa signals mubashara:
             </p>
             <div className="bg-[#040817] border border-blue-900/60 rounded-xl p-3 text-[10px] font-mono text-cyan-400 break-all select-all">
-              {`<iframe src="https://deriv-analysis-tool-psi.vercel.app" width="100%" height="700px" frameborder="0"></iframe>`}
+              {`<iframe src="https://deriv-analysis-tool-psi.vercel.app" width="100%" height="750px" frameborder="0"></iframe>`}
             </div>
             <button
-              onClick={() => copyToClipboard(`<iframe src="https://deriv-analysis-tool-psi.vercel.app" width="100%" height="700px" frameborder="0"></iframe>`)}
+              onClick={() => copyToClipboard(`<iframe src="https://deriv-analysis-tool-psi.vercel.app" width="100%" height="750px" frameborder="0"></iframe>`)}
               className="w-full bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 text-cyan-300 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2"
             >
               <Copy className="w-3.5 h-3.5" />
@@ -678,7 +702,7 @@ export default function EnterpriseApp() {
           </div>
         </div>
 
-        {/* Right Columns: AI Predictions and Heatmap */}
+        {/* Right Columns: AI Signals & Heatmap */}
         <div className="lg:col-span-2 space-y-6">
           <div className="bg-[#0a1128] border border-blue-900/40 rounded-3xl p-6 shadow-2xl relative overflow-hidden">
             <div className="flex items-center justify-between pb-4 border-b border-blue-900/40">
@@ -723,7 +747,7 @@ export default function EnterpriseApp() {
             </div>
 
             <div className="mt-4 bg-[#040817]/80 border border-blue-900/30 rounded-2xl p-4">
-              <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Sababu ya Kiufundi ya AI:</span>
+              <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Sababu ya Kiufundi:</span>
               <p className="text-xs text-slate-300 italic">
                 {data?.aiRecommendation?.reason || "Inakusanya ticks na kuhesabu probability matrices..."}
               </p>
@@ -733,7 +757,7 @@ export default function EnterpriseApp() {
           {/* Digit Heatmap */}
           <div className="bg-[#0a1128] border border-blue-900/40 rounded-3xl p-6 shadow-xl">
             <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2 mb-4">
-              <BarChart3 className="w-4 h-4 text-cyan-400" /> Digit Distribution Heatmap (0 - 9)
+              <BarChart3 className="w-4 h-4 text-cyan-400" /> Digit Heatmap (0 - 9)
             </h3>
             <div className="grid grid-cols-5 sm:grid-cols-10 gap-2">
               {Array.from({ length: 10 }).map((_, digit) => {

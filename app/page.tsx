@@ -121,10 +121,8 @@ export default function LizyTradeEnterprise() {
     currentUser?.email?.toLowerCase() === "bensonlaizer53@gmail.com" ||
     currentUser?.deriv_id?.toUpperCase() === "ROT91981412";
 
-  // External Bot Station URL kulingana na cheo
-  const externalBotUrl = isCurrentUserAdmin
-    ? "https://lizytrade.site"
-    : "https://bot.deriv.com";
+  // URL rasmi ya Deriv Bot kwa kila mtu (Ikiwemo wewe na wateja)
+  const externalBotUrl = "https://bot.deriv.com";
 
   // Sauti ya tahadhari (Beep)
   const playSignalAlertSound = useCallback(() => {
@@ -406,7 +404,7 @@ export default function LizyTradeEnterprise() {
         </div>
       )}
 
-      {/* Header safi kabisa ya Full Dashboard */}
+      {/* Header */}
       <header className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between pb-5 border-b border-blue-900/40 gap-4">
         <div className="flex items-center gap-3">
           <div className="p-3 bg-gradient-to-br from-blue-600/30 to-cyan-500/20 border border-cyan-500/40 rounded-2xl text-cyan-400 shadow-lg shadow-cyan-500/10">
@@ -433,18 +431,18 @@ export default function LizyTradeEnterprise() {
           </div>
         </div>
 
-        {/* Action Controls za Kibiashara */}
+        {/* Action Controls */}
         <div className="flex items-center flex-wrap gap-2.5">
 
-          {/* Kitufe cha kwenda kwenye LizyTrade Site au Deriv Bot */}
+          {/* Kitufe cha Launch Deriv Bot kinachoelekea bot.deriv.com moja kwa moja */}
           <a
             href={externalBotUrl}
             target="_blank"
             rel="noreferrer"
             className="text-xs bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white px-4 py-2.5 rounded-xl font-bold flex items-center gap-2 transition-all shadow-lg shadow-cyan-500/20 cursor-pointer"
-            title={isCurrentUserAdmin ? "Fungua lizytrade.site kwenye tab mpya" : "Fungua Deriv Bot kwenye tab mpya"}
+            title="Fungua Deriv Bot kwenye tab mpya"
           >
-            <span>{isCurrentUserAdmin ? "Open lizytrade.site ↗" : "Launch Deriv Bot ↗"}</span>
+            <span>Launch Deriv Bot ↗</span>
             <ExternalLink className="w-3.5 h-3.5" />
           </a>
 

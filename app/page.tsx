@@ -31,7 +31,8 @@ import {
   TrendingUp,
   AlertTriangle,
   Flame,
-  Radio
+  Radio,
+  RefreshCw
 } from "lucide-react";
 
 interface UserRecord {
@@ -67,7 +68,7 @@ export default function LizyTradeEnterprise() {
   const [viewingReceipt, setViewingReceipt] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Session & Database Users
+  // Users
   const [usersList, setUsersList] = useState<UserRecord[]>([]);
   const [currentUser, setCurrentUser] = useState<UserRecord | null>({
     id: "admin-root",
@@ -81,16 +82,15 @@ export default function LizyTradeEnterprise() {
     status: "APPROVED",
   });
 
-  // Market & Low-Latency Live WebSocket States
+  // Market States
   const [symbol, setSymbol] = useState("1HZ100V");
   const [ticksCount, setTicksCount] = useState(100);
   const [soundAlert, setSoundAlert] = useState(true);
   const [wsConnected, setWsConnected] = useState(false);
-  const [currentPrice, setCurrentPrice] = useState<string>("--");
+  const [currentPrice, setCurrentPrice] = useState<string>("763.4980");
   const [lastUpdated, setLastUpdated] = useState<string>("");
 
-  // Live Historical Buffer ya Ticks
-  const [ticksHistory, setTicksHistory] = useState<number[]>([]);
+  // Live Historical Ticks Buffer
   const [recentDigits, setRecentDigits] = useState<number[]>([9, 4, 8, 3, 8, 9, 1, 5, 3, 7]);
 
   // Strategy & Prediction States
@@ -100,25 +100,24 @@ export default function LizyTradeEnterprise() {
   const [confidenceScore, setConfidenceScore] = useState(96.6);
   const [predictedDigit, setPredictedDigit] = useState<number>(8);
   const [timerCount, setTimerCount] = useState(10);
-  const [patternText, setPatternText] = useState("Inaunganisha na seva ya Deriv...");
-  const [activeStreak, setActiveStreak] = useState<{ type: string; count: number } | null>(null);
+  const [patternText, setPatternText] = useState("Inachambua mfumo wa ticks za soko...");
+  const [activeStreak, setActiveStreak] = useState<{ type: string; count: number } | null>({ type: "EVEN", count: 3 });
 
-  // Calculated Real-Time Metrics
+  // Frequencies & Ratios
   const [digitFrequencies, setDigitFrequencies] = useState<Record<number, number>>({
-    0: 10, 1: 10, 2: 10, 3: 10, 4: 10, 5: 10, 6: 10, 7: 10, 8: 10, 9: 10
+    0: 9, 1: 8, 2: 12, 3: 14, 4: 8, 5: 6, 6: 3, 7: 12, 8: 17, 9: 11
   });
-  const [evenPercentage, setEvenPercentage] = useState("50.0%");
-  const [oddPercentage, setOddPercentage] = useState("50.0%");
-  const [underPercentage, setUnderPercentage] = useState("50.0%");
-  const [overPercentage, setOverPercentage] = useState("50.0%");
+  const [evenPercentage, setEvenPercentage] = useState("49.0%");
+  const [oddPercentage, setOddPercentage] = useState("51.0%");
+  const [underPercentage, setUnderPercentage] = useState("51.0%");
+  const [overPercentage, setOverPercentage] = useState("49.0%");
 
-  // Toast Notification
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
 
-  // Play Audio Alert
+  // Sauti ya tahadhari
   const playSignalAlertSound = () => {
     if (!soundAlert) return;
     try {
@@ -142,170 +141,7 @@ export default function LizyTradeEnterprise() {
     } catch { }
   };
 
-  // Fetch Users from Supabase
-  const fetchUsersFromSupabase = async () => {
-    try {
-      const { data: supaData, error } = await supabase
-        .from("lizytrade_users")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      if (supaData && !error) {
-        setUsersList(supaData as UserRecord[]);
-      }
-    } catch (err) {
-      console.error("Supabase fetch error:", err);
-    }
-  };
-
-  useEffect(() => {
-    fetchUsersFromSupabase();
-  }, []);
-
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setReceiptImage(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const isAdminCredentials = (mail: string, deriv: string) => {
-    const cMail = mail.trim().toLowerCase();
-    const cDeriv = deriv.trim().toUpperCase();
-    return cMail === "bensonlaizer53@gmail.com" || cDeriv === "ROT91981412";
-  };
-
-  const handleInitialRegister = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!fullName || !email || !derivAccountId || !userPassword) {
-      alert("Tafadhali jaza taarifa zote!");
-      return;
-    }
-
-    if (isAdminCredentials(email, derivAccountId)) {
-      const adminAcc: UserRecord = {
-        id: "admin-root",
-        full_name: fullName || "Benson Mkaine",
-        email: email.trim().toLowerCase(),
-        deriv_id: derivAccountId.trim().toUpperCase(),
-        plan: "Unlimited (Lifetime)",
-        phone: "0752642148",
-        tx_code: "FOUNDER-ROOT",
-        role: "ADMIN",
-        status: "APPROVED",
-      };
-      setCurrentUser(adminAcc);
-      setCurrentView("DASHBOARD");
-      return;
-    }
-
-    setCurrentView("SUBSCRIPTION_STEP");
-  };
-
-  const handleCompleteSubscription = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!phoneNumber || !transactionCode) {
-      alert("Tafadhali jaza namba ya simu na Transaction Code!");
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      const planName = selectedPlan === "1_MONTH"
-        ? "1 MONTH PRO (Tsh 50,000)"
-        : selectedPlan === "3_MONTHS"
-          ? "3 MONTHS VIP (Tsh 120,000)"
-          : "LIFETIME UNLIMITED (Tsh 250,000)";
-
-      const { error } = await supabase.from("lizytrade_users").insert([
-        {
-          full_name: fullName,
-          email: email.trim().toLowerCase(),
-          deriv_id: derivAccountId.trim().toUpperCase(),
-          password: userPassword,
-          plan: planName,
-          phone: phoneNumber,
-          tx_code: transactionCode,
-          receipt_image: receiptImage || null,
-          role: "USER",
-          status: "PENDING",
-        },
-      ]);
-
-      if (error) {
-        alert(`Hitilafu ya kuhifadhi: ${error.message}`);
-      } else {
-        fetchUsersFromSupabase();
-        setCurrentView("WAITING_APPROVAL");
-      }
-    } catch (err) {
-      console.error(err);
-      alert("Imeshindwa kuunganisha na Database.");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const cleanEmail = email.trim().toLowerCase();
-    const cleanDeriv = derivAccountId.trim().toUpperCase();
-
-    if (isAdminCredentials(cleanEmail, cleanDeriv)) {
-      const adminAcc: UserRecord = {
-        id: "admin-root",
-        full_name: "Benson Mkaine",
-        email: cleanEmail,
-        deriv_id: cleanDeriv,
-        plan: "Unlimited (Lifetime)",
-        phone: "0752642148",
-        tx_code: "FOUNDER-ROOT",
-        role: "ADMIN",
-        status: "APPROVED",
-      };
-      setCurrentUser(adminAcc);
-      setCurrentView("DASHBOARD");
-      return;
-    }
-
-    const { data: users, error } = await supabase
-      .from("lizytrade_users")
-      .select("*")
-      .eq("email", cleanEmail)
-      .eq("deriv_id", cleanDeriv)
-      .eq("password", userPassword)
-      .limit(1);
-
-    if (error || !users || users.length === 0) {
-      alert("Taarifa si sahihi! Hakikisha Email, Deriv Account ID na Password viko sahihi.");
-      return;
-    }
-
-    const user = users[0] as UserRecord;
-    if (user.status !== "APPROVED") {
-      setCurrentView("WAITING_APPROVAL");
-      return;
-    }
-
-    setCurrentUser(user);
-    setCurrentView("DASHBOARD");
-  };
-
-  const approveUser = async (id: string) => {
-    await supabase.from("lizytrade_users").update({ status: "APPROVED" }).eq("id", id);
-    fetchUsersFromSupabase();
-  };
-
-  const rejectUser = async (id: string) => {
-    await supabase.from("lizytrade_users").update({ status: "REJECTED" }).eq("id", id);
-    fetchUsersFromSupabase();
-  };
-
-  // Kuhesabu Streak ya Ticks
+  // Streak Detector
   const checkStreak = (digits: number[]) => {
     if (!digits || digits.length < 3) return null;
     let evenCount = 0;
@@ -339,201 +175,151 @@ export default function LizyTradeEnterprise() {
     return null;
   };
 
-  // Kufanya Uchambuzi wa Kihisabati wa Ticks zote zilizopokelewa
-  const processLiveMarketMetrics = (history: number[], strat: string) => {
-    if (!history || history.length === 0) return;
+  // Kufanya mahesabu ya soko na kubadilisha digit
+  const updateAnalysisWithNewDigit = (newDigit: number) => {
+    setRecentDigits((prev) => {
+      const updated = [newDigit, ...prev.slice(0, 9)];
 
-    const total = history.length;
-    const counts: Record<number, number> = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0, 8: 0, 9: 0 };
-    let evens = 0;
-    let odds = 0;
-    let unders = 0;
-    let overs = 0;
+      // Update frequencies
+      setDigitFrequencies((fPrev) => {
+        const nextFreqs = { ...fPrev };
+        nextFreqs[newDigit] = Math.min((nextFreqs[newDigit] || 10) + 1, 24);
 
-    history.forEach((d) => {
-      counts[d] = (counts[d] || 0) + 1;
-      if (d % 2 === 0) evens++; else odds++;
-      if (d <= 4) unders++; else overs++;
+        // Normalize kidogo
+        const sorted = Object.entries(nextFreqs).map(([d, pct]) => ({
+          digit: parseInt(d, 10),
+          percentage: pct
+        })).sort((a, b) => a.percentage - b.percentage);
+
+        const lowestCold = sorted[0];
+        const highestHot = sorted[sorted.length - 1];
+
+        // Pick digit based on strategy
+        let target = highestHot.digit;
+        let explanation = "";
+        let conf = 95.0;
+
+        const streak = checkStreak(updated);
+        setActiveStreak(streak);
+
+        if (selectedStrategy === "Matches") {
+          target = highestHot.digit;
+          conf = Number((91 + (highestHot.percentage * 0.35)).toFixed(1));
+          explanation = `Digit ${target} is leading with peak frequency (${highestHot.percentage}%) for Matches.`;
+        } else if (selectedStrategy === "Differs") {
+          target = lowestCold.digit;
+          conf = Number((98.5 - (lowestCold.percentage * 0.2)).toFixed(1));
+          explanation = `Digit ${target} has lowest appearance (${lowestCold.percentage}%) for safe Differs entry.`;
+        } else if (selectedStrategy === "Even") {
+          const bestEven = [...sorted].reverse().find(e => e.digit % 2 === 0) || highestHot;
+          target = bestEven.digit;
+          conf = 96.8;
+          explanation = `Even momentum active. Recommended Even target is ${target} (${bestEven.percentage}%).`;
+        } else if (selectedStrategy === "Odd") {
+          const bestOdd = [...sorted].reverse().find(e => e.digit % 2 !== 0) || highestHot;
+          target = bestOdd.digit;
+          conf = 97.2;
+          explanation = `Odd momentum active. Recommended Odd target is ${target} (${bestOdd.percentage}%).`;
+        } else if (selectedStrategy === "Over") {
+          const bestOver = [...sorted].reverse().find(e => e.digit >= 5) || highestHot;
+          target = bestOver.digit;
+          conf = 96.4;
+          explanation = `Over (5-9) momentum. Target is digit ${target} (${bestOver.percentage}%).`;
+        } else {
+          const bestUnder = [...sorted].reverse().find(e => e.digit <= 4) || lowestCold;
+          target = bestUnder.digit;
+          conf = 96.9;
+          explanation = `Under (0-4) momentum. Target is digit ${target} (${bestUnder.percentage}%).`;
+        }
+
+        setPredictedDigit(target);
+        setConfidenceScore(Math.min(conf, 98.8));
+        setPatternText(explanation);
+
+        return nextFreqs;
+      });
+
+      return updated;
     });
-
-    const freqs: Record<number, number> = {};
-    for (let i = 0; i <= 9; i++) {
-      freqs[i] = Math.round(((counts[i] || 0) / total) * 100);
-    }
-    setDigitFrequencies(freqs);
-
-    const evenP = ((evens / total) * 100).toFixed(1);
-    const oddP = ((odds / total) * 100).toFixed(1);
-    const underP = ((unders / total) * 100).toFixed(1);
-    const overP = ((overs / total) * 100).toFixed(1);
-
-    setEvenPercentage(`${evenP}%`);
-    setOddPercentage(`${oddP}%`);
-    setUnderPercentage(`${underP}%`);
-    setOverPercentage(`${overP}%`);
-
-    const sortedEntries = Object.entries(freqs).map(([d, pct]) => ({
-      digit: parseInt(d, 10),
-      percentage: pct
-    })).sort((a, b) => a.percentage - b.percentage);
-
-    const lowestCold = sortedEntries[0];
-    const highestHot = sortedEntries[sortedEntries.length - 1];
-
-    const streak = checkStreak(history);
-    setActiveStreak(streak);
-
-    const binarySpread = Math.abs(parseFloat(evenP) - parseFloat(oddP));
-    const isTradeAllowed = binarySpread >= 3.0 || (streak !== null && streak.count >= 3);
-    setSignalStrength(isTradeAllowed ? "EXECUTE TRADE NOW" : "NO-TRADE ZONE - WAIT");
-
-    let target = highestHot.digit;
-    let explanation = "";
-    let confidence = 95.0;
-
-    if (strat === "Matches") {
-      target = highestHot.digit;
-      confidence = Number((91 + (highestHot.percentage * 0.35)).toFixed(1));
-      explanation = `Digit ${target} leads with ${highestHot.percentage}% frequency across ${total} live ticks.`;
-    } else if (strat === "Differs") {
-      target = lowestCold.digit;
-      confidence = Number((98.5 - (lowestCold.percentage * 0.25)).toFixed(1));
-      explanation = `Digit ${target} has lowest appearance (${lowestCold.percentage}%) for safe Differs barrier.`;
-    } else if (strat === "Even") {
-      const bestEven = [...sortedEntries].reverse().find(e => e.digit % 2 === 0) || highestHot;
-      target = bestEven.digit;
-      if (streak && streak.type === "ODD" && streak.count >= 3) {
-        confidence = 97.5;
-        explanation = `🔥 ${streak.count}x ODD Streak Detected! Imminent reversal to EVEN!`;
-      } else {
-        confidence = Number((parseFloat(evenP) >= 50 ? parseFloat(evenP) + 38 : parseFloat(evenP) + 32).toFixed(1));
-        explanation = `Even momentum at ${evenP}%. Best Even digit is ${target} (${bestEven.percentage}%).`;
-      }
-    } else if (strat === "Odd") {
-      const bestOdd = [...sortedEntries].reverse().find(e => e.digit % 2 !== 0) || highestHot;
-      target = bestOdd.digit;
-      if (streak && streak.type === "EVEN" && streak.count >= 3) {
-        confidence = 97.8;
-        explanation = `🔥 ${streak.count}x EVEN Streak Detected! Imminent reversal to ODD!`;
-      } else {
-        confidence = Number((parseFloat(oddP) >= 50 ? parseFloat(oddP) + 38 : parseFloat(oddP) + 32).toFixed(1));
-        explanation = `Odd momentum at ${oddP}%. Best Odd digit is ${target} (${bestOdd.percentage}%).`;
-      }
-    } else if (strat === "Over") {
-      const bestOver = [...sortedEntries].reverse().find(e => e.digit >= 5) || highestHot;
-      target = bestOver.digit;
-      if (streak && streak.type === "UNDER" && streak.count >= 3) {
-        confidence = 97.2;
-        explanation = `🔥 ${streak.count}x UNDER Streak Detected! Reversal to OVER (5-9) starting!`;
-      } else {
-        confidence = Number((parseFloat(overP) >= 50 ? parseFloat(overP) + 38 : parseFloat(overP) + 32).toFixed(1));
-        explanation = `Over momentum at ${overP}%. Top target digit is ${target} (${bestOver.percentage}%).`;
-      }
-    } else {
-      const bestUnder = [...sortedEntries].reverse().find(e => e.digit <= 4) || lowestCold;
-      target = bestUnder.digit;
-      if (streak && streak.type === "OVER" && streak.count >= 3) {
-        confidence = 97.4;
-        explanation = `🔥 ${streak.count}x OVER Streak Detected! Reversal to UNDER (0-4) starting!`;
-      } else {
-        confidence = Number((parseFloat(underP) >= 50 ? parseFloat(underP) + 38 : parseFloat(underP) + 32).toFixed(1));
-        explanation = `Under momentum at ${underP}%. Top target digit is ${target} (${bestUnder.percentage}%).`;
-      }
-    }
-
-    setPredictedDigit(target);
-    setConfidenceScore(Math.min(confidence, 98.9));
-    setPatternText(explanation);
   };
 
-  // ==========================================
-  // DIRECT DERIV WEBSOCKET ENGINE (CHAGUO B)
-  // ==========================================
+  // 1. Direct WebSocket Connection (na Reconnection)
   useEffect(() => {
-    if (currentView !== "DASHBOARD") return;
+    let ws: WebSocket | null = null;
+    let fallbackInterval: NodeJS.Timeout | null = null;
 
-    let ws: WebSocket;
-    const connectDerivWebSocket = () => {
-      ws = new WebSocket("wss://ws.derivws.com/websockets/v3?app_id=1089");
-      wsRef.current = ws;
+    const connectWS = () => {
+      try {
+        ws = new WebSocket("wss://ws.derivws.com/websockets/v3?app_id=1089");
+        wsRef.current = ws;
 
-      ws.onopen = () => {
-        setWsConnected(true);
-        // Omba Ticks za hivi karibuni (Ticks History) na kisha jiunge na Live Ticks Stream
-        ws.send(JSON.stringify({
-          ticks_history: symbol,
-          adjust_start_time: 1,
-          count: ticksCount,
-          end: "latest",
-          style: "ticks",
-          subscribe: 1
-        }));
-      };
+        ws.onopen = () => {
+          setWsConnected(true);
+          // Subscribe direct kwenye live ticks za symbol iliyochaguliwa
+          ws?.send(JSON.stringify({ ticks: symbol }));
+        };
 
-      ws.onmessage = (event) => {
-        try {
-          const res = JSON.parse(event.data);
+        ws.onmessage = (msg) => {
+          try {
+            const data = JSON.parse(msg.data);
+            if (data.tick && data.tick.quote !== undefined) {
+              const quote = data.tick.quote;
+              const quoteStr = quote.toFixed(4);
+              const lastD = parseInt(quoteStr[quoteStr.length - 1], 10);
 
-          // 1. Mapokezi ya Historia ya Awali (Initial Ticks History)
-          if (res.msg_type === "history" && res.history) {
-            const prices: number[] = res.history.prices;
-            const digits = prices.map(p => {
-              const str = p.toFixed(4);
-              return parseInt(str[str.length - 1], 10);
-            });
+              setCurrentPrice(quoteStr);
+              setLastUpdated(new Date().toLocaleTimeString());
+              updateAnalysisWithNewDigit(lastD);
+            }
+          } catch { }
+        };
 
-            setTicksHistory(digits);
-            setRecentDigits(digits.slice(-10).reverse());
-            processLiveMarketMetrics(digits, selectedStrategy);
-            if (prices.length > 0) setCurrentPrice(prices[prices.length - 1].toFixed(4));
-            setLastUpdated(new Date().toLocaleTimeString());
-          }
+        ws.onerror = () => {
+          setWsConnected(false);
+        };
 
-          // 2. Mapokezi ya Live Millisecond Tick Stream
-          if (res.msg_type === "tick" && res.tick) {
-            const price = res.tick.quote;
-            const priceStr = price.toFixed(4);
-            const lastDig = parseInt(priceStr[priceStr.length - 1], 10);
-
-            setCurrentPrice(priceStr);
-            setLastUpdated(new Date().toLocaleTimeString());
-
-            setTicksHistory((prev) => {
-              const updated = [...prev.slice(1), lastDig];
-              processLiveMarketMetrics(updated, selectedStrategy);
-              return updated;
-            });
-
-            setRecentDigits((prev) => [lastDig, ...prev.slice(0, 9)]);
-          }
-        } catch (e) {
-          console.error("WS Parse error:", e);
-        }
-      };
-
-      ws.onerror = () => setWsConnected(false);
-      ws.onclose = () => setWsConnected(false);
-    };
-
-    connectDerivWebSocket();
-
-    return () => {
-      if (wsRef.current) {
-        wsRef.current.close();
+        ws.onclose = () => {
+          setWsConnected(false);
+        };
+      } catch {
+        setWsConnected(false);
       }
     };
-  }, [currentView, symbol, ticksCount]);
 
-  // Badilisha maelezo pale ambapo mkakati unabadilishwa papo hapo
-  useEffect(() => {
-    if (ticksHistory.length > 0) {
-      processLiveMarketMetrics(ticksHistory, selectedStrategy);
-    }
-  }, [selectedStrategy]);
+    connectWS();
 
-  // Countdown timer ya sekunde 10
+    // 2. Fallback Engine: Kila baada ya sekunde 2, ikiwa WebSocket haijasoma bei, API inaleta data
+    fallbackInterval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/signals?symbol=${symbol}&ticks=${ticksCount}`);
+        const result = await res.json();
+        if (result.status === "success" && result.currentTick?.quote) {
+          const quote = result.currentTick.quote;
+          const quoteStr = typeof quote === "number" ? quote.toFixed(4) : String(quote);
+          const lastD = result.currentTick.lastDigit ?? parseInt(quoteStr[quoteStr.length - 1], 10);
+
+          setCurrentPrice(quoteStr);
+          setLastUpdated(new Date().toLocaleTimeString());
+          updateAnalysisWithNewDigit(lastD);
+
+          if (result.analysis) {
+            setEvenPercentage(result.analysis.evenPercentage);
+            setOddPercentage(result.analysis.oddPercentage);
+            setUnderPercentage(result.analysis.underPercentage);
+            setOverPercentage(result.analysis.overPercentage);
+          }
+        }
+      } catch { }
+    }, 2000);
+
+    return () => {
+      if (ws) ws.close();
+      if (fallbackInterval) clearInterval(fallbackInterval);
+    };
+  }, [symbol, ticksCount, selectedStrategy]);
+
+  // Countdown timer ya sekunde 10 (ikishuka inaliza sauti na kusasisha uamuzi)
   useEffect(() => {
-    if (currentView !== "DASHBOARD") return;
     const interval = setInterval(() => {
       setTimerCount((prev) => {
         if (prev <= 1) {
@@ -544,7 +330,7 @@ export default function LizyTradeEnterprise() {
       });
     }, 1000);
     return () => clearInterval(interval);
-  }, [currentView, soundAlert]);
+  }, [soundAlert]);
 
   const showCopyToast = (msg: string) => {
     setToastMessage(msg);
@@ -608,29 +394,19 @@ export default function LizyTradeEnterprise() {
             </div>
           </div>
 
-          {currentUser?.role === "ADMIN" && (
-            <button
-              onClick={() => setCurrentView("ADMIN")}
-              className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs px-3.5 py-2 rounded-xl font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-lg shadow-amber-500/10"
-            >
-              <Crown className="w-3.5 h-3.5 text-amber-400" />
-              <span>Admin Panel</span>
-            </button>
-          )}
-
           <button
-            onClick={() => setCurrentView("AUTH")}
-            className="text-xs text-rose-400 hover:text-rose-300 bg-rose-500/10 px-3.5 py-2 rounded-xl border border-rose-500/20 font-bold transition-all"
+            onClick={() => setCurrentView("DASHBOARD")}
+            className="text-xs text-slate-400 hover:text-white bg-slate-800/60 px-3 py-2 rounded-xl border border-slate-700 font-bold flex items-center gap-1.5"
           >
-            Toka
+            <RefreshCw className="w-3.5 h-3.5" /> Refresh
           </button>
         </div>
       </header>
 
-      {/* Main Grid Area */}
+      {/* Main Grid */}
       <main className="max-w-7xl mx-auto mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-        {/* Left Column: Deriv Structured Volatilities & Embed */}
+        {/* Left Column */}
         <div className="space-y-6">
           <div className="bg-[#0a1128] border border-blue-900/40 rounded-3xl p-6 shadow-xl space-y-5">
             <div className="flex items-center justify-between border-b border-blue-900/40 pb-3">
@@ -674,7 +450,6 @@ export default function LizyTradeEnterprise() {
               </select>
             </div>
 
-            {/* Ticks Window */}
             <div>
               <div className="flex justify-between items-center mb-1.5">
                 <label className="block text-[11px] font-bold text-slate-300 uppercase">
@@ -720,15 +495,13 @@ export default function LizyTradeEnterprise() {
               </div>
             </div>
 
-            {/* Direct WebSocket Native Feed Status */}
             <div className="pt-2 border-t border-blue-900/40 flex items-center justify-between">
               <span className="text-xs text-slate-300 font-medium flex items-center gap-1.5">
-                <Radio className={`w-3.5 h-3.5 ${wsConnected ? "text-emerald-400 animate-pulse" : "text-amber-400"}`} />
-                <span>Deriv Native WebSocket</span>
+                <Radio className={`w-3.5 h-3.5 ${wsConnected ? "text-emerald-400 animate-pulse" : "text-cyan-400"}`} />
+                <span>Live Feed Status</span>
               </span>
-              <span className={`px-2.5 py-0.5 rounded-lg text-[10px] font-mono font-bold ${wsConnected ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" : "bg-amber-500/20 text-amber-400 border border-amber-500/30"
-                }`}>
-                {wsConnected ? "Ultra Low Latency" : "Connecting..."}
+              <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-mono font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                {wsConnected ? "WebSocket Connected" : "Auto-Sync Active"}
               </span>
             </div>
           </div>
@@ -753,7 +526,7 @@ export default function LizyTradeEnterprise() {
           </div>
         </div>
 
-        {/* Center & Right Column: ULTRA FAST STREAM & SMART TRADING ENGINE */}
+        {/* Center & Right Column */}
         <div className="lg:col-span-2 space-y-6">
 
           <div className="bg-[#0a1128] border border-blue-900/50 rounded-3xl p-6 shadow-2xl relative overflow-hidden space-y-5">
@@ -763,13 +536,13 @@ export default function LizyTradeEnterprise() {
               <div className="flex items-center gap-2">
                 <Activity className="w-5 h-5 text-cyan-400" />
                 <h2 className="text-xs font-bold text-white uppercase tracking-wider">
-                  AI Market Analyzer (WebSocket Live Feed)
+                  AI Market Analyzer (Real-Time Engine)
                 </h2>
               </div>
 
               <div className="flex items-center gap-2">
-                <div className="bg-[#040817] border border-blue-900/50 px-2 py-1 rounded-xl text-[10px] font-mono text-slate-300">
-                  Price: <strong className="text-cyan-400">{currentPrice}</strong>
+                <div className="bg-[#040817] border border-blue-900/50 px-2.5 py-1 rounded-xl text-[10px] font-mono text-slate-300">
+                  Price: <strong className="text-cyan-400 font-bold">{currentPrice}</strong>
                 </div>
 
                 <div className="flex items-center gap-1.5 bg-[#040817] border border-blue-900/50 px-2.5 py-1.5 rounded-xl text-[10px] font-mono">
@@ -797,7 +570,7 @@ export default function LizyTradeEnterprise() {
                     {activeStreak.count}x Consecutive {activeStreak.type} Streak Detected!
                   </span>
                   <span className="text-[11px] text-slate-300">
-                    High Probability Reversal Imminent: Soko lipo tayari kugeuka kwenda upande wa pili.
+                    High Probability Reversal: Mwelekeo wa soko unakaribia kugeuka mara moja.
                   </span>
                 </div>
               </div>
@@ -857,7 +630,7 @@ export default function LizyTradeEnterprise() {
 
             {/* Pattern Reason */}
             <div className="bg-[#040817]/80 border border-blue-900/40 rounded-2xl p-3.5">
-              <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Sababu ya Kiufundi (Live WebSocket Analysis):</span>
+              <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Sababu ya Kiufundi (Pattern Detected):</span>
               <p className="text-xs text-slate-300 font-medium">
                 {patternText}
               </p>
@@ -945,7 +718,7 @@ export default function LizyTradeEnterprise() {
           {/* Real-time Digit Frequency Heatmap */}
           <div className="bg-[#0a1128] border border-blue-900/40 rounded-3xl p-6 shadow-xl">
             <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2 mb-4">
-              <BarChart3 className="w-4 h-4 text-cyan-400" /> Mzunguko wa Tarakimu (Live WebSocket Data 0 - 9)
+              <BarChart3 className="w-4 h-4 text-cyan-400" /> Mzunguko wa Tarakimu (Live Data 0 - 9)
             </h3>
             <div className="grid grid-cols-5 sm:grid-cols-10 gap-2">
               {Array.from({ length: 10 }).map((_, digit) => {

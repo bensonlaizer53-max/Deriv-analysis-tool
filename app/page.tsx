@@ -10,8 +10,6 @@ import {
   BarChart3,
   Sliders,
   Copy,
-  RefreshCw,
-  CreditCard,
   Volume2,
   VolumeX,
   MessageCircle,
@@ -32,7 +30,8 @@ import {
   CheckCircle2,
   TrendingUp,
   AlertTriangle,
-  Flame
+  Flame,
+  Radio
 } from "lucide-react";
 
 interface UserRecord {
@@ -82,15 +81,16 @@ export default function LizyTradeEnterprise() {
     status: "APPROVED",
   });
 
-  // Market & Analysis States
+  // Market & Low-Latency Live WebSocket States
   const [symbol, setSymbol] = useState("1HZ100V");
   const [ticksCount, setTicksCount] = useState(100);
-  const [autoRefresh, setAutoRefresh] = useState(true);
   const [soundAlert, setSoundAlert] = useState(true);
-  const [data, setData] = useState<any>(null);
+  const [wsConnected, setWsConnected] = useState(false);
+  const [currentPrice, setCurrentPrice] = useState<string>("--");
   const [lastUpdated, setLastUpdated] = useState<string>("");
 
-  // Live Last 10 Ticks Stream
+  // Live Historical Buffer ya Ticks
+  const [ticksHistory, setTicksHistory] = useState<number[]>([]);
   const [recentDigits, setRecentDigits] = useState<number[]>([9, 4, 8, 3, 8, 9, 1, 5, 3, 7]);
 
   // Strategy & Prediction States
@@ -100,31 +100,45 @@ export default function LizyTradeEnterprise() {
   const [confidenceScore, setConfidenceScore] = useState(96.6);
   const [predictedDigit, setPredictedDigit] = useState<number>(8);
   const [timerCount, setTimerCount] = useState(10);
-  const [patternText, setPatternText] = useState("Inachambua mfumo wa soko...");
+  const [patternText, setPatternText] = useState("Inaunganisha na seva ya Deriv...");
+  const [activeStreak, setActiveStreak] = useState<{ type: string; count: number } | null>(null);
 
-  // Streak & Reversal Detection States
-  const [activeStreak, setActiveStreak] = useState<{ type: string; count: number } | null>({ type: "EVEN", count: 3 });
+  // Calculated Real-Time Metrics
+  const [digitFrequencies, setDigitFrequencies] = useState<Record<number, number>>({
+    0: 10, 1: 10, 2: 10, 3: 10, 4: 10, 5: 10, 6: 10, 7: 10, 8: 10, 9: 10
+  });
+  const [evenPercentage, setEvenPercentage] = useState("50.0%");
+  const [oddPercentage, setOddPercentage] = useState("50.0%");
+  const [underPercentage, setUnderPercentage] = useState("50.0%");
+  const [overPercentage, setOverPercentage] = useState("50.0%");
 
-  // Floating Toast Copy Notification
+  // Toast Notification
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Audio tone generator
+  const wsRef = useRef<WebSocket | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+
+  // Play Audio Alert
   const playSignalAlertSound = () => {
     if (!soundAlert) return;
     try {
-      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioContextClass) return;
-      const ctx = new AudioContextClass();
+      if (!audioCtxRef.current) {
+        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+        audioCtxRef.current = new AudioContextClass();
+      }
+      const ctx = audioCtxRef.current;
+      if (ctx.state === "suspended") ctx.resume();
+
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = "sine";
       osc.frequency.setValueAtTime(987.77, ctx.currentTime);
-      gain.gain.setValueAtTime(0.15, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+      gain.gain.setValueAtTime(0.12, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.25);
       osc.connect(gain);
       gain.connect(ctx.destination);
       osc.start();
-      osc.stop(ctx.currentTime + 0.3);
+      osc.stop(ctx.currentTime + 0.25);
     } catch { }
   };
 
@@ -291,11 +305,9 @@ export default function LizyTradeEnterprise() {
     fetchUsersFromSupabase();
   };
 
-  // Kazi ya Kuhesabu Mfululizo (Streak Detector)
-  const analyzeStreak = (digits: number[]) => {
+  // Kuhesabu Streak ya Ticks
+  const checkStreak = (digits: number[]) => {
     if (!digits || digits.length < 3) return null;
-
-    // Angalia Even/Odd Streak
     let evenCount = 0;
     let oddCount = 0;
     for (const d of digits) {
@@ -307,11 +319,9 @@ export default function LizyTradeEnterprise() {
         oddCount++;
       }
     }
-
     if (evenCount >= 3) return { type: "EVEN", count: evenCount };
     if (oddCount >= 3) return { type: "ODD", count: oddCount };
 
-    // Angalia Under/Over Streak
     let underCount = 0;
     let overCount = 0;
     for (const d of digits) {
@@ -323,145 +333,210 @@ export default function LizyTradeEnterprise() {
         overCount++;
       }
     }
-
     if (underCount >= 3) return { type: "UNDER", count: underCount };
     if (overCount >= 3) return { type: "OVER", count: overCount };
 
     return null;
   };
 
-  // Logic ya Kuhesabu Usahihi (Accuracy), Reversal na Prediction
-  const computePreciseDigit = (marketData: any, currentStrategy: string, ticksStream: number[]) => {
-    if (!marketData?.analysis?.digitFrequency) return;
+  // Kufanya Uchambuzi wa Kihisabati wa Ticks zote zilizopokelewa
+  const processLiveMarketMetrics = (history: number[], strat: string) => {
+    if (!history || history.length === 0) return;
 
-    const freqs: Record<number, number> = marketData.analysis.digitFrequency;
+    const total = history.length;
+    const counts: Record<number, number> = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0, 8: 0, 9: 0 };
+    let evens = 0;
+    let odds = 0;
+    let unders = 0;
+    let overs = 0;
+
+    history.forEach((d) => {
+      counts[d] = (counts[d] || 0) + 1;
+      if (d % 2 === 0) evens++; else odds++;
+      if (d <= 4) unders++; else overs++;
+    });
+
+    const freqs: Record<number, number> = {};
+    for (let i = 0; i <= 9; i++) {
+      freqs[i] = Math.round(((counts[i] || 0) / total) * 100);
+    }
+    setDigitFrequencies(freqs);
+
+    const evenP = ((evens / total) * 100).toFixed(1);
+    const oddP = ((odds / total) * 100).toFixed(1);
+    const underP = ((unders / total) * 100).toFixed(1);
+    const overP = ((overs / total) * 100).toFixed(1);
+
+    setEvenPercentage(`${evenP}%`);
+    setOddPercentage(`${oddP}%`);
+    setUnderPercentage(`${underP}%`);
+    setOverPercentage(`${overP}%`);
+
     const sortedEntries = Object.entries(freqs).map(([d, pct]) => ({
       digit: parseInt(d, 10),
-      percentage: typeof pct === "string" ? parseFloat(pct) : Number(pct)
+      percentage: pct
     })).sort((a, b) => a.percentage - b.percentage);
 
     const lowestCold = sortedEntries[0];
     const highestHot = sortedEntries[sortedEntries.length - 1];
 
-    let targetDigit = highestHot.digit;
-    let explanation = "";
-    let calculatedConfidence = 95.0;
-
-    const evenPct = parseFloat(marketData.analysis.evenPercentage) || 50;
-    const oddPct = parseFloat(marketData.analysis.oddPercentage) || 50;
-    const underPct = parseFloat(marketData.analysis.underPercentage) || 50;
-    const overPct = parseFloat(marketData.analysis.overPercentage) || 50;
-
-    // Angalia Streak ya hivi karibuni
-    const streak = analyzeStreak(ticksStream);
+    const streak = checkStreak(history);
     setActiveStreak(streak);
 
-    // Smart Trading Filter: Tambua kama soko lina faida au ni Choppy
-    const binarySpread = Math.abs(evenPct - oddPct);
-    const underOverSpread = Math.abs(underPct - overPct);
-
-    let isTradeAllowed = true;
-    if (currentStrategy === "Even" || currentStrategy === "Odd") {
-      isTradeAllowed = binarySpread >= 4.0 || (streak !== null && streak.count >= 3);
-    } else if (currentStrategy === "Over" || currentStrategy === "Under") {
-      isTradeAllowed = underOverSpread >= 4.0 || (streak !== null && streak.count >= 3);
-    } else {
-      isTradeAllowed = highestHot.percentage >= 13.0 || lowestCold.percentage <= 6.0;
-    }
-
+    const binarySpread = Math.abs(parseFloat(evenP) - parseFloat(oddP));
+    const isTradeAllowed = binarySpread >= 3.0 || (streak !== null && streak.count >= 3);
     setSignalStrength(isTradeAllowed ? "EXECUTE TRADE NOW" : "NO-TRADE ZONE - WAIT");
 
-    if (currentStrategy === "Matches") {
-      targetDigit = highestHot.digit;
-      calculatedConfidence = Number((91 + (highestHot.percentage * 0.4)).toFixed(1));
-      explanation = `Digit ${targetDigit} is leading with peak frequency (${highestHot.percentage}%) for high-probability Matches.`;
-    } else if (currentStrategy === "Differs") {
-      targetDigit = lowestCold.digit;
-      calculatedConfidence = Number((98.5 - (lowestCold.percentage * 0.2)).toFixed(1));
-      explanation = `Digit ${targetDigit} has lowest appearance (${lowestCold.percentage}%) giving optimal Differs safety margin.`;
-    } else if (currentStrategy === "Even") {
+    let target = highestHot.digit;
+    let explanation = "";
+    let confidence = 95.0;
+
+    if (strat === "Matches") {
+      target = highestHot.digit;
+      confidence = Number((91 + (highestHot.percentage * 0.35)).toFixed(1));
+      explanation = `Digit ${target} leads with ${highestHot.percentage}% frequency across ${total} live ticks.`;
+    } else if (strat === "Differs") {
+      target = lowestCold.digit;
+      confidence = Number((98.5 - (lowestCold.percentage * 0.25)).toFixed(1));
+      explanation = `Digit ${target} has lowest appearance (${lowestCold.percentage}%) for safe Differs barrier.`;
+    } else if (strat === "Even") {
       const bestEven = [...sortedEntries].reverse().find(e => e.digit % 2 === 0) || highestHot;
-      targetDigit = bestEven.digit;
-
-      // Ikiwa kuna ODD streak ya mara 3 au zaidi, uwezekano wa EVEN unaruka hadi 97%+
+      target = bestEven.digit;
       if (streak && streak.type === "ODD" && streak.count >= 3) {
-        calculatedConfidence = 97.4;
-        explanation = `🔥 ${streak.count}x ODD Streak Detected! Mathematical Reversal to EVEN is imminent!`;
+        confidence = 97.5;
+        explanation = `🔥 ${streak.count}x ODD Streak Detected! Imminent reversal to EVEN!`;
       } else {
-        calculatedConfidence = Number((evenPct >= 50 ? evenPct + 38 : evenPct + 32).toFixed(1));
-        explanation = `Even digits dominate (${evenPct}%). Strongest Even digit is ${targetDigit} (${bestEven.percentage}%).`;
+        confidence = Number((parseFloat(evenP) >= 50 ? parseFloat(evenP) + 38 : parseFloat(evenP) + 32).toFixed(1));
+        explanation = `Even momentum at ${evenP}%. Best Even digit is ${target} (${bestEven.percentage}%).`;
       }
-    } else if (currentStrategy === "Odd") {
+    } else if (strat === "Odd") {
       const bestOdd = [...sortedEntries].reverse().find(e => e.digit % 2 !== 0) || highestHot;
-      targetDigit = bestOdd.digit;
-
-      // Ikiwa kuna EVEN streak ya mara 3 au zaidi, uwezekano wa ODD unaruka hadi 97%+
+      target = bestOdd.digit;
       if (streak && streak.type === "EVEN" && streak.count >= 3) {
-        calculatedConfidence = 97.8;
-        explanation = `🔥 ${streak.count}x EVEN Streak Detected! Mathematical Reversal to ODD is imminent!`;
+        confidence = 97.8;
+        explanation = `🔥 ${streak.count}x EVEN Streak Detected! Imminent reversal to ODD!`;
       } else {
-        calculatedConfidence = Number((oddPct >= 50 ? oddPct + 38 : oddPct + 32).toFixed(1));
-        explanation = `Odd digits dominate (${oddPct}%). Strongest Odd digit is ${targetDigit} (${bestOdd.percentage}%).`;
+        confidence = Number((parseFloat(oddP) >= 50 ? parseFloat(oddP) + 38 : parseFloat(oddP) + 32).toFixed(1));
+        explanation = `Odd momentum at ${oddP}%. Best Odd digit is ${target} (${bestOdd.percentage}%).`;
       }
-    } else if (currentStrategy === "Over") {
+    } else if (strat === "Over") {
       const bestOver = [...sortedEntries].reverse().find(e => e.digit >= 5) || highestHot;
-      targetDigit = bestOver.digit;
-
+      target = bestOver.digit;
       if (streak && streak.type === "UNDER" && streak.count >= 3) {
-        calculatedConfidence = 97.2;
-        explanation = `🔥 ${streak.count}x UNDER Streak Detected! Imminent Reversal to OVER (5-9)!`;
+        confidence = 97.2;
+        explanation = `🔥 ${streak.count}x UNDER Streak Detected! Reversal to OVER (5-9) starting!`;
       } else {
-        calculatedConfidence = Number((overPct >= 50 ? overPct + 38 : overPct + 32).toFixed(1));
-        explanation = `Over (5-9) momentum is at ${overPct}%. Top digit is ${targetDigit} (${bestOver.percentage}%).`;
+        confidence = Number((parseFloat(overP) >= 50 ? parseFloat(overP) + 38 : parseFloat(overP) + 32).toFixed(1));
+        explanation = `Over momentum at ${overP}%. Top target digit is ${target} (${bestOver.percentage}%).`;
       }
     } else {
-      // Under
       const bestUnder = [...sortedEntries].reverse().find(e => e.digit <= 4) || lowestCold;
-      targetDigit = bestUnder.digit;
-
+      target = bestUnder.digit;
       if (streak && streak.type === "OVER" && streak.count >= 3) {
-        calculatedConfidence = 97.5;
-        explanation = `🔥 ${streak.count}x OVER Streak Detected! Imminent Reversal to UNDER (0-4)!`;
+        confidence = 97.4;
+        explanation = `🔥 ${streak.count}x OVER Streak Detected! Reversal to UNDER (0-4) starting!`;
       } else {
-        calculatedConfidence = Number((underPct >= 50 ? underPct + 38 : underPct + 32).toFixed(1));
-        explanation = `Under (0-4) momentum is at ${underPct}%. Top digit is ${targetDigit} (${bestUnder.percentage}%).`;
+        confidence = Number((parseFloat(underP) >= 50 ? parseFloat(underP) + 38 : parseFloat(underP) + 32).toFixed(1));
+        explanation = `Under momentum at ${underP}%. Top target digit is ${target} (${bestUnder.percentage}%).`;
       }
     }
 
-    setPredictedDigit(targetDigit);
+    setPredictedDigit(target);
+    setConfidenceScore(Math.min(confidence, 98.9));
     setPatternText(explanation);
-    setConfidenceScore(Math.min(calculatedConfidence, 98.9));
-    setCurrentTrend(Math.random() > 0.45 ? "Downtrend" : "Uptrend");
   };
 
-  // Signals API Fetcher
-  const fetchSignals = async () => {
-    try {
-      const res = await fetch(`/api/signals?symbol=${symbol}&ticks=${ticksCount}`);
-      const result = await res.json();
-      if (result.status === "success") {
-        setData(result);
-        setLastUpdated(new Date().toLocaleTimeString());
-
-        const incomingTick = result.currentTick?.lastDigit !== undefined
-          ? result.currentTick.lastDigit
-          : Math.floor(Math.random() * 10);
-
-        const updatedStream = [incomingTick, ...recentDigits.slice(0, 8)];
-        setRecentDigits(updatedStream);
-        computePreciseDigit(result, selectedStrategy, updatedStream);
-      }
-    } catch (e) {
-      console.error("Fetch error:", e);
-    }
-  };
-
+  // ==========================================
+  // DIRECT DERIV WEBSOCKET ENGINE (CHAGUO B)
+  // ==========================================
   useEffect(() => {
-    if (currentView !== "DASHBOARD" || !autoRefresh) return;
+    if (currentView !== "DASHBOARD") return;
+
+    let ws: WebSocket;
+    const connectDerivWebSocket = () => {
+      ws = new WebSocket("wss://ws.derivws.com/websockets/v3?app_id=1089");
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        setWsConnected(true);
+        // Omba Ticks za hivi karibuni (Ticks History) na kisha jiunge na Live Ticks Stream
+        ws.send(JSON.stringify({
+          ticks_history: symbol,
+          adjust_start_time: 1,
+          count: ticksCount,
+          end: "latest",
+          style: "ticks",
+          subscribe: 1
+        }));
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const res = JSON.parse(event.data);
+
+          // 1. Mapokezi ya Historia ya Awali (Initial Ticks History)
+          if (res.msg_type === "history" && res.history) {
+            const prices: number[] = res.history.prices;
+            const digits = prices.map(p => {
+              const str = p.toFixed(4);
+              return parseInt(str[str.length - 1], 10);
+            });
+
+            setTicksHistory(digits);
+            setRecentDigits(digits.slice(-10).reverse());
+            processLiveMarketMetrics(digits, selectedStrategy);
+            if (prices.length > 0) setCurrentPrice(prices[prices.length - 1].toFixed(4));
+            setLastUpdated(new Date().toLocaleTimeString());
+          }
+
+          // 2. Mapokezi ya Live Millisecond Tick Stream
+          if (res.msg_type === "tick" && res.tick) {
+            const price = res.tick.quote;
+            const priceStr = price.toFixed(4);
+            const lastDig = parseInt(priceStr[priceStr.length - 1], 10);
+
+            setCurrentPrice(priceStr);
+            setLastUpdated(new Date().toLocaleTimeString());
+
+            setTicksHistory((prev) => {
+              const updated = [...prev.slice(1), lastDig];
+              processLiveMarketMetrics(updated, selectedStrategy);
+              return updated;
+            });
+
+            setRecentDigits((prev) => [lastDig, ...prev.slice(0, 9)]);
+          }
+        } catch (e) {
+          console.error("WS Parse error:", e);
+        }
+      };
+
+      ws.onerror = () => setWsConnected(false);
+      ws.onclose = () => setWsConnected(false);
+    };
+
+    connectDerivWebSocket();
+
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+    };
+  }, [currentView, symbol, ticksCount]);
+
+  // Badilisha maelezo pale ambapo mkakati unabadilishwa papo hapo
+  useEffect(() => {
+    if (ticksHistory.length > 0) {
+      processLiveMarketMetrics(ticksHistory, selectedStrategy);
+    }
+  }, [selectedStrategy]);
+
+  // Countdown timer ya sekunde 10
+  useEffect(() => {
+    if (currentView !== "DASHBOARD") return;
     const interval = setInterval(() => {
       setTimerCount((prev) => {
         if (prev <= 1) {
-          if (data) computePreciseDigit(data, selectedStrategy, recentDigits);
           playSignalAlertSound();
           return 10;
         }
@@ -469,17 +544,7 @@ export default function LizyTradeEnterprise() {
       });
     }, 1000);
     return () => clearInterval(interval);
-  }, [currentView, autoRefresh, symbol, selectedStrategy, soundAlert, data, recentDigits]);
-
-  useEffect(() => {
-    if (currentView === "DASHBOARD") {
-      fetchSignals();
-      if (autoRefresh) {
-        const t = setInterval(fetchSignals, 2000);
-        return () => clearInterval(t);
-      }
-    }
-  }, [currentView, symbol, ticksCount, autoRefresh]);
+  }, [currentView, soundAlert]);
 
   const showCopyToast = (msg: string) => {
     setToastMessage(msg);
@@ -491,7 +556,6 @@ export default function LizyTradeEnterprise() {
     showCopyToast(`🎯 Digit ${digitVal} Imenakiliwa! Weka moja kwa moja kwenye Bot yako.`);
   };
 
-  // Properties za Digit ya Sasa
   const isDigitEven = predictedDigit % 2 === 0;
   const isDigitOver = predictedDigit >= 5;
 
@@ -590,10 +654,7 @@ export default function LizyTradeEnterprise() {
               <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1.5">Synthetic Index:</label>
               <select
                 value={symbol}
-                onChange={(e) => {
-                  setSymbol(e.target.value);
-                  fetchSignals();
-                }}
+                onChange={(e) => setSymbol(e.target.value)}
                 className="w-full bg-[#040817] border border-blue-900/60 rounded-xl px-4 py-3 text-xs text-white focus:outline-none focus:border-cyan-400 font-bold cursor-pointer"
               >
                 <optgroup label="Continuous Indices (Normal)">
@@ -659,16 +720,16 @@ export default function LizyTradeEnterprise() {
               </div>
             </div>
 
+            {/* Direct WebSocket Native Feed Status */}
             <div className="pt-2 border-t border-blue-900/40 flex items-center justify-between">
-              <span className="text-xs text-slate-300 font-medium">Auto Real-Time Feed</span>
-              <button
-                onClick={() => setAutoRefresh(!autoRefresh)}
-                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${autoRefresh ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" : "bg-slate-800 text-slate-400"
-                  }`}
-              >
-                <RefreshCw className={`w-3 h-3 ${autoRefresh ? "animate-spin" : ""}`} />
-                {autoRefresh ? "Live Active" : "Paused"}
-              </button>
+              <span className="text-xs text-slate-300 font-medium flex items-center gap-1.5">
+                <Radio className={`w-3.5 h-3.5 ${wsConnected ? "text-emerald-400 animate-pulse" : "text-amber-400"}`} />
+                <span>Deriv Native WebSocket</span>
+              </span>
+              <span className={`px-2.5 py-0.5 rounded-lg text-[10px] font-mono font-bold ${wsConnected ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" : "bg-amber-500/20 text-amber-400 border border-amber-500/30"
+                }`}>
+                {wsConnected ? "Ultra Low Latency" : "Connecting..."}
+              </span>
             </div>
           </div>
 
@@ -692,7 +753,7 @@ export default function LizyTradeEnterprise() {
           </div>
         </div>
 
-        {/* Center & Right Column: HIGH ACCURACY STREAK & SMART FILTER ENGINE */}
+        {/* Center & Right Column: ULTRA FAST STREAM & SMART TRADING ENGINE */}
         <div className="lg:col-span-2 space-y-6">
 
           <div className="bg-[#0a1128] border border-blue-900/50 rounded-3xl p-6 shadow-2xl relative overflow-hidden space-y-5">
@@ -702,24 +763,30 @@ export default function LizyTradeEnterprise() {
               <div className="flex items-center gap-2">
                 <Activity className="w-5 h-5 text-cyan-400" />
                 <h2 className="text-xs font-bold text-white uppercase tracking-wider">
-                  AI Market Analyzer (Streak & Reversal Engine)
+                  AI Market Analyzer (WebSocket Live Feed)
                 </h2>
               </div>
 
-              <div className="flex items-center gap-1.5 bg-[#040817] border border-blue-900/50 px-2.5 py-1.5 rounded-xl text-[10px] font-mono">
-                <span className="text-slate-400 uppercase text-[9px] mr-1">Ticks:</span>
-                {recentDigits.map((dig, idx) => (
-                  <span
-                    key={idx}
-                    className={`font-bold px-1 rounded ${idx === 0 ? "bg-cyan-500/20 text-cyan-300 ring-1 ring-cyan-400 animate-pulse" : dig % 2 === 0 ? "text-cyan-400" : "text-indigo-400"}`}
-                  >
-                    {dig}
-                  </span>
-                ))}
+              <div className="flex items-center gap-2">
+                <div className="bg-[#040817] border border-blue-900/50 px-2 py-1 rounded-xl text-[10px] font-mono text-slate-300">
+                  Price: <strong className="text-cyan-400">{currentPrice}</strong>
+                </div>
+
+                <div className="flex items-center gap-1.5 bg-[#040817] border border-blue-900/50 px-2.5 py-1.5 rounded-xl text-[10px] font-mono">
+                  <span className="text-slate-400 uppercase text-[9px] mr-1">Ticks:</span>
+                  {recentDigits.map((dig, idx) => (
+                    <span
+                      key={idx}
+                      className={`font-bold px-1 rounded ${idx === 0 ? "bg-cyan-500/20 text-cyan-300 ring-1 ring-cyan-400 animate-pulse" : dig % 2 === 0 ? "text-cyan-400" : "text-indigo-400"}`}
+                    >
+                      {dig}
+                    </span>
+                  ))}
+                </div>
               </div>
             </div>
 
-            {/* Streak Alert Banner (Inatokea tu mfululizo ukiwa mara 3 au zaidi) */}
+            {/* Streak Alert Banner */}
             {activeStreak && activeStreak.count >= 3 && (
               <div className="bg-gradient-to-r from-amber-500/20 via-orange-500/10 to-transparent border border-amber-500/40 rounded-2xl p-3 flex items-center gap-3 animate-pulse">
                 <div className="p-2 bg-amber-500/20 rounded-xl text-amber-400">
@@ -747,7 +814,6 @@ export default function LizyTradeEnterprise() {
                     key={strat}
                     onClick={() => {
                       setSelectedStrategy(strat);
-                      if (data) computePreciseDigit(data, strat, recentDigits);
                       playSignalAlertSound();
                     }}
                     className={`py-2 rounded-xl text-xs font-bold transition-all border ${selectedStrategy === strat
@@ -761,7 +827,7 @@ export default function LizyTradeEnterprise() {
               </div>
             </div>
 
-            {/* Metrics Bar with Accuracy & Smart Filter Status */}
+            {/* Metrics Bar */}
             <div className="grid grid-cols-3 gap-3 bg-[#040817] border border-blue-900/50 rounded-2xl p-4">
               <div>
                 <span className="text-[10px] font-bold text-slate-400 uppercase block">Current Trend:</span>
@@ -791,27 +857,24 @@ export default function LizyTradeEnterprise() {
 
             {/* Pattern Reason */}
             <div className="bg-[#040817]/80 border border-blue-900/40 rounded-2xl p-3.5">
-              <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Sababu ya Kiufundi (Pattern Detected):</span>
+              <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Sababu ya Kiufundi (Live WebSocket Analysis):</span>
               <p className="text-xs text-slate-300 font-medium">
                 {patternText}
               </p>
             </div>
 
-            {/* Center Area: DYNAMIC STRATEGY BUTTONS & DIGIT IDENTIFICATION BADGE */}
+            {/* Dynamic Buttons & Digit Identification Badge */}
             <div className="pt-2 flex items-center justify-between gap-4">
 
-              {/* Left Action Button (Dynamic) */}
+              {/* Left Action Button */}
               <button
                 onClick={() => {
                   if (selectedStrategy === "Even" || selectedStrategy === "Odd") {
                     setSelectedStrategy("Even");
-                    if (data) computePreciseDigit(data, "Even", recentDigits);
                   } else if (selectedStrategy === "Over" || selectedStrategy === "Under") {
                     setSelectedStrategy("Over");
-                    if (data) computePreciseDigit(data, "Over", recentDigits);
                   } else {
                     setSelectedStrategy("Matches");
-                    if (data) computePreciseDigit(data, "Matches", recentDigits);
                   }
                   playSignalAlertSound();
                 }}
@@ -827,7 +890,7 @@ export default function LizyTradeEnterprise() {
                     : "MATCHES"}
               </button>
 
-              {/* Center Circle with Digit Properties (ODD/EVEN & OVER/UNDER) */}
+              {/* Center Circle with One-Click Copy */}
               <div className="flex flex-col items-center">
                 <div
                   onClick={() => copyDigitToClipboard(predictedDigit)}
@@ -842,7 +905,7 @@ export default function LizyTradeEnterprise() {
                   </span>
                 </div>
 
-                {/* Accuracy Tags Bar Beneath Circle */}
+                {/* Accuracy Tags Bar */}
                 <div className="flex items-center gap-1 mt-2">
                   <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md border ${isDigitEven ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/40" : "bg-indigo-500/20 text-indigo-300 border-indigo-500/40"}`}>
                     {isDigitEven ? "EVEN" : "ODD"}
@@ -853,18 +916,15 @@ export default function LizyTradeEnterprise() {
                 </div>
               </div>
 
-              {/* Right Action Button (Dynamic) */}
+              {/* Right Action Button */}
               <button
                 onClick={() => {
                   if (selectedStrategy === "Even" || selectedStrategy === "Odd") {
                     setSelectedStrategy("Odd");
-                    if (data) computePreciseDigit(data, "Odd", recentDigits);
                   } else if (selectedStrategy === "Over" || selectedStrategy === "Under") {
                     setSelectedStrategy("Under");
-                    if (data) computePreciseDigit(data, "Under", recentDigits);
                   } else {
                     setSelectedStrategy("Differs");
-                    if (data) computePreciseDigit(data, "Differs", recentDigits);
                   }
                   playSignalAlertSound();
                 }}
@@ -882,14 +942,14 @@ export default function LizyTradeEnterprise() {
             </div>
           </div>
 
-          {/* Original Digit Frequency Heatmap (0 - 9) */}
+          {/* Real-time Digit Frequency Heatmap */}
           <div className="bg-[#0a1128] border border-blue-900/40 rounded-3xl p-6 shadow-xl">
             <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2 mb-4">
-              <BarChart3 className="w-4 h-4 text-cyan-400" /> Mzunguko wa Tarakimu (Digit Statistics 0 - 9)
+              <BarChart3 className="w-4 h-4 text-cyan-400" /> Mzunguko wa Tarakimu (Live WebSocket Data 0 - 9)
             </h3>
             <div className="grid grid-cols-5 sm:grid-cols-10 gap-2">
               {Array.from({ length: 10 }).map((_, digit) => {
-                const pct = data?.analysis?.digitFrequency?.[digit] || 10;
+                const pct = digitFrequencies[digit] || 10;
                 const isCold = pct <= 7;
                 const isHot = pct >= 14;
 
@@ -917,34 +977,34 @@ export default function LizyTradeEnterprise() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6 pt-6 border-t border-blue-900/40">
               <div className="bg-[#040817] border border-blue-900/40 rounded-2xl p-4">
                 <div className="flex justify-between text-xs font-bold mb-2">
-                  <span className="text-cyan-400">EVEN: {data?.analysis?.evenPercentage || "54.0%"}</span>
-                  <span className="text-indigo-400">ODD: {data?.analysis?.oddPercentage || "46.0%"}</span>
+                  <span className="text-cyan-400">EVEN: {evenPercentage}</span>
+                  <span className="text-indigo-400">ODD: {oddPercentage}</span>
                 </div>
                 <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden flex">
                   <div
-                    className="bg-cyan-500 h-full transition-all duration-500"
-                    style={{ width: data?.analysis?.evenPercentage || "54%" }}
+                    className="bg-cyan-500 h-full transition-all duration-300"
+                    style={{ width: evenPercentage }}
                   />
                   <div
-                    className="bg-indigo-500 h-full transition-all duration-500"
-                    style={{ width: data?.analysis?.oddPercentage || "46%" }}
+                    className="bg-indigo-500 h-full transition-all duration-300"
+                    style={{ width: oddPercentage }}
                   />
                 </div>
               </div>
 
               <div className="bg-[#040817] border border-blue-900/40 rounded-2xl p-4">
                 <div className="flex justify-between text-xs font-bold mb-2">
-                  <span className="text-blue-400">UNDER (0-4): {data?.analysis?.underPercentage || "46.0%"}</span>
-                  <span className="text-emerald-400">OVER (5-9): {data?.analysis?.overPercentage || "54.0%"}</span>
+                  <span className="text-blue-400">UNDER (0-4): {underPercentage}</span>
+                  <span className="text-emerald-400">OVER (5-9): {overPercentage}</span>
                 </div>
                 <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden flex">
                   <div
-                    className="bg-blue-500 h-full transition-all duration-500"
-                    style={{ width: data?.analysis?.underPercentage || "46%" }}
+                    className="bg-blue-500 h-full transition-all duration-300"
+                    style={{ width: underPercentage }}
                   />
                   <div
-                    className="bg-emerald-500 h-full transition-all duration-500"
-                    style={{ width: data?.analysis?.overPercentage || "54%" }}
+                    className="bg-emerald-500 h-full transition-all duration-300"
+                    style={{ width: overPercentage }}
                   />
                 </div>
               </div>

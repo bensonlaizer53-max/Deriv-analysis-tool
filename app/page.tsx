@@ -35,7 +35,8 @@ import {
   Info,
   Wifi,
   LockKeyhole,
-  Sparkles
+  Sparkles,
+  PlayCircle
 } from "lucide-react";
 
 interface UserRecord {
@@ -87,6 +88,9 @@ export default function LizyTradeEnterprise() {
 
   // Market Configuration States
   const [symbol, setSymbol] = useState("1HZ100V");
+  const [activeAnalyzedSymbol, setActiveAnalyzedSymbol] = useState("1HZ100V");
+  const [needsRecalibration, setNeedsRecalibration] = useState(false);
+
   const [ticksCount, setTicksCount] = useState(100);
   const [soundAlert, setSoundAlert] = useState(true);
   const [wsConnected, setWsConnected] = useState(false);
@@ -196,6 +200,8 @@ export default function LizyTradeEnterprise() {
 
   // Injini Kuu ya Uchambuzi
   const processIncomingTick = useCallback((lastD: number, newPriceStr?: string) => {
+    if (needsRecalibration) return; // Zuia uchambuzi hadi mteja atakapobonyeza kitufe cha kuanzisha upya
+
     lastTickTimeRef.current = Date.now();
     setLatencyMs(Math.floor(Math.random() * 8) + 14);
 
@@ -260,7 +266,6 @@ export default function LizyTradeEnterprise() {
       const lowestCold = sorted[0];
       const highestHot = sorted[sorted.length - 1];
 
-      // Kama tupo kwenye awamu ya sekunde 60 za kuchuja soko (Deep Analysis Cooldown), usibadilishe namba hadi mzunguko uishe!
       if (phaseState === "DEEP_ANALYZING") {
         const normalizedFreqs: Record<number, number> = {};
         sorted.forEach(item => {
@@ -281,7 +286,7 @@ export default function LizyTradeEnterprise() {
         if (selectedStrategy === "Matches") {
           target = markovDigit;
           conf = 99.7;
-          explanation = `High-Probability Markov AI: Digit ${target} locked for 10s execution window.`;
+          explanation = `High-Probability Markov AI: Digit ${target} locked for 10s execution window on ${activeAnalyzedSymbol}.`;
         } else {
           target = highestHot.digit;
         }
@@ -290,7 +295,7 @@ export default function LizyTradeEnterprise() {
       if (selectedStrategy === "Differs") {
         target = lowestCold.digit;
         conf = 99.8;
-        explanation = `High-Probability Filter: Digit ${target} is extremely cold (${lowestCold.pct}%) - Safe Differs.`;
+        explanation = `High-Probability Filter: Digit ${target} is extremely cold (${lowestCold.pct}%) on ${activeAnalyzedSymbol}.`;
       } else if (selectedStrategy === "Even") {
         const bestEven = [...sorted].reverse().find(e => e.digit % 2 === 0) || highestHot;
         target = bestEven.digit;
@@ -326,7 +331,7 @@ export default function LizyTradeEnterprise() {
 
       return normalizedFreqs;
     });
-  }, [selectedStrategy, phaseState]);
+  }, [selectedStrategy, phaseState, needsRecalibration, activeAnalyzedSymbol]);
 
   // Live WebSocket Connection + 24/7 Keep-Alive Auto-Reconnect
   useEffect(() => {
@@ -386,7 +391,7 @@ export default function LizyTradeEnterprise() {
 
     const livePulse = setInterval(() => {
       const timeSinceLast = Date.now() - lastTickTimeRef.current;
-      if (timeSinceLast >= 1200) {
+      if (timeSinceLast >= 1200 && !needsRecalibration) {
         const nextD = Math.floor(Math.random() * 10);
         processIncomingTick(nextD);
       }
@@ -398,15 +403,35 @@ export default function LizyTradeEnterprise() {
       if (ws) ws.close();
       clearInterval(livePulse);
     };
-  }, [symbol, processIncomingTick]);
+  }, [symbol, processIncomingTick, needsRecalibration]);
 
-  // Professional Cooldown & Phase State Logic (10s Lock -> 60s Deep Analysis)
+  // Handle Symbol Change Detector
+  const handleSymbolChange = (newSymbol: string) => {
+    setSymbol(newSymbol);
+    if (newSymbol !== activeAnalyzedSymbol) {
+      setNeedsRecalibration(true); // Washa bendera kuwa soko limebadilika, linahitaji kuanzishwa upya
+    }
+  };
+
+  // Trigger Calibration & Start Analysis
+  const startRecalibration = () => {
+    setActiveAnalyzedSymbol(symbol);
+    setNeedsRecalibration(false);
+    markovMatrixRef.current = {}; // Safisha kumbukumbu ya soko la zamani
+    setPhaseState("ACTIVE_LOCKED");
+    setTimerCount(10);
+    playSignalAlertSound();
+    showCopyToast(`🚀 Soko la ${symbol} limeunganishwa! Markov AI inachambua sasa hivi.`);
+  };
+
+  // Cooldown & Phase State Logic (10s Lock -> 60s Deep Analysis)
   useEffect(() => {
+    if (needsRecalibration) return;
+
     const mainTimer = setInterval(() => {
       if (phaseState === "ACTIVE_LOCKED") {
         setTimerCount((prev) => {
           if (prev <= 1) {
-            // Sekunde 10 zimeisha, sasa tunaingia kwenye sekunde 60 za Deep Analysis
             setPhaseState("DEEP_ANALYZING");
             setCooldownCountdown(60);
             setSignalStrength("DEEP ANALYZING (60s)");
@@ -418,7 +443,6 @@ export default function LizyTradeEnterprise() {
       } else {
         setCooldownCountdown((prev) => {
           if (prev <= 1) {
-            // Sekunde 60 zimeisha, sasa tunatupa signal mpya yenye usahihi mkubwa
             setPhaseState("ACTIVE_LOCKED");
             setTimerCount(10);
             setSignalStrength("EXECUTE TRADE NOW");
@@ -431,7 +455,7 @@ export default function LizyTradeEnterprise() {
     }, 1000);
 
     return () => clearInterval(mainTimer);
-  }, [phaseState, playSignalAlertSound]);
+  }, [phaseState, needsRecalibration, playSignalAlertSound]);
 
   // Supabase Load
   useEffect(() => {
@@ -527,6 +551,7 @@ export default function LizyTradeEnterprise() {
 
             <button
               onClick={() => {
+                setNeedsRecalibration(false);
                 setPhaseState("ACTIVE_LOCKED");
                 setTimerCount(10);
                 const nextD = Math.floor(Math.random() * 10);
@@ -543,7 +568,7 @@ export default function LizyTradeEnterprise() {
         {/* Main Content Full Dashboard Grid */}
         <main className="max-w-7xl mx-auto mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-          {/* Left Column: Mipangilio ya Soko & Embed */}
+          {/* Left Column: Mipangilio ya Soko & Calibration Notice */}
           <div className="space-y-6">
             <div className="bg-[#0a1128] border border-blue-900/40 rounded-3xl p-6 shadow-xl space-y-5">
               <div className="flex items-center justify-between border-b border-blue-900/40 pb-3">
@@ -567,7 +592,7 @@ export default function LizyTradeEnterprise() {
                 <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1.5">Synthetic Index:</label>
                 <select
                   value={symbol}
-                  onChange={(e) => setSymbol(e.target.value)}
+                  onChange={(e) => handleSymbolChange(e.target.value)}
                   className="w-full bg-[#040817] border border-blue-900/60 rounded-xl px-4 py-3 text-xs text-white focus:outline-none focus:border-cyan-400 font-bold cursor-pointer"
                 >
                   <optgroup label="Continuous Indices (Normal)">
@@ -586,6 +611,22 @@ export default function LizyTradeEnterprise() {
                   </optgroup>
                 </select>
               </div>
+
+              {/* Kitufe Maalum cha Kubadilisha Soko na Kuanzisha Upya */}
+              {needsRecalibration && (
+                <div className="bg-gradient-to-r from-amber-500/20 to-orange-500/10 border border-amber-500/50 rounded-2xl p-4 text-center space-y-3 animate-bounce">
+                  <p className="text-xs text-amber-300 font-bold">
+                    ⚠️ Soko limebadilishwa kwenda <span className="text-white underline">{symbol}</span>. Anzisha uchambuzi mpya!
+                  </p>
+                  <button
+                    onClick={startRecalibration}
+                    className="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black py-2.5 rounded-xl flex items-center justify-center gap-2 shadow-lg cursor-pointer transition-all"
+                  >
+                    <PlayCircle className="w-4 h-4" />
+                    <span>Anzisha Analysis Upya</span>
+                  </button>
+                </div>
+              )}
 
               <div>
                 <div className="flex justify-between items-center mb-1.5">
@@ -637,11 +678,13 @@ export default function LizyTradeEnterprise() {
                   <Wifi className={`w-3.5 h-3.5 ${wsConnected ? "text-emerald-400" : "text-amber-400"}`} />
                   <span>Ping: ~{latencyMs}ms</span>
                 </span>
-                <span className={`px-2.5 py-0.5 rounded-lg text-[10px] font-mono font-bold border ${phaseState === "ACTIVE_LOCKED"
+                <span className={`px-2.5 py-0.5 rounded-lg text-[10px] font-mono font-bold border ${needsRecalibration
                     ? "bg-amber-500/20 text-amber-400 border-amber-500/30"
-                    : "bg-blue-500/20 text-blue-300 border-blue-500/30 animate-pulse"
+                    : phaseState === "ACTIVE_LOCKED"
+                      ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+                      : "bg-blue-500/20 text-blue-300 border-blue-500/30 animate-pulse"
                   }`}>
-                  {phaseState === "ACTIVE_LOCKED" ? `🔒 Active (${timerCount}s)` : `⏳ Filtering (${cooldownCountdown}s)`}
+                  {needsRecalibration ? "⚠️ Needs Start" : phaseState === "ACTIVE_LOCKED" ? `🔒 Active (${timerCount}s)` : `⏳ Filtering (${cooldownCountdown}s)`}
                 </span>
               </div>
             </div>
@@ -676,7 +719,7 @@ export default function LizyTradeEnterprise() {
                 <div className="flex items-center gap-2">
                   <Activity className="w-5 h-5 text-cyan-400" />
                   <h2 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                    <span>Markov AI High-Probability Engine</span>
+                    <span>Markov AI High-Probability Engine ({activeAnalyzedSymbol})</span>
                     {phaseState === "DEEP_ANALYZING" && <Sparkles className="w-3.5 h-3.5 text-cyan-400 animate-spin" />}
                   </h2>
                 </div>
@@ -703,19 +746,23 @@ export default function LizyTradeEnterprise() {
                 </div>
               </div>
 
-              {/* Dynamic Guide Banner kulingana na Awamu (10s au 60s) */}
-              <div className={`border rounded-2xl p-3 flex items-center gap-3 transition-all ${phaseState === "ACTIVE_LOCKED"
-                  ? "bg-gradient-to-r from-emerald-600/20 via-cyan-500/10 to-transparent border-emerald-500/40"
-                  : "bg-gradient-to-r from-blue-600/20 via-indigo-500/10 to-transparent border-blue-500/40"
+              {/* Dynamic Guide Banner */}
+              <div className={`border rounded-2xl p-3 flex items-center gap-3 transition-all ${needsRecalibration
+                  ? "bg-gradient-to-r from-amber-600/20 via-orange-500/10 to-transparent border-amber-500/40"
+                  : phaseState === "ACTIVE_LOCKED"
+                    ? "bg-gradient-to-r from-emerald-600/20 via-cyan-500/10 to-transparent border-emerald-500/40"
+                    : "bg-gradient-to-r from-blue-600/20 via-indigo-500/10 to-transparent border-blue-500/40"
                 }`}>
-                <div className={`p-2 rounded-xl ${phaseState === "ACTIVE_LOCKED" ? "bg-emerald-500/20 text-emerald-400" : "bg-blue-500/20 text-cyan-400"}`}>
-                  {phaseState === "ACTIVE_LOCKED" ? <CheckCircle2 className="w-4 h-4" /> : <Sparkles className="w-4 h-4 animate-spin" />}
+                <div className={`p-2 rounded-xl ${needsRecalibration ? "bg-amber-500/20 text-amber-400" : phaseState === "ACTIVE_LOCKED" ? "bg-emerald-500/20 text-emerald-400" : "bg-blue-500/20 text-cyan-400"}`}>
+                  {needsRecalibration ? <AlertTriangle className="w-4 h-4" /> : phaseState === "ACTIVE_LOCKED" ? <CheckCircle2 className="w-4 h-4" /> : <Sparkles className="w-4 h-4 animate-spin" />}
                 </div>
                 <p className="text-xs text-slate-200">
-                  {phaseState === "ACTIVE_LOCKED" ? (
-                    <><strong>EXECUTE TRADE NOW (10s Valid):</strong> Namba hii imelockwa kwa usahihi wa hali ya juu. Bofya kunakili, kisha nenda kwenye <a href="https://bot.deriv.com" target="_blank" rel="noreferrer" className="text-emerald-400 underline font-bold">bot.deriv.com</a> kutenda biashara.</>
+                  {needsRecalibration ? (
+                    <><strong>Subiri Calibration:</strong> Umebadilisha kwenda <strong>{symbol}</strong>. Bonyeza kitufe cha <em>"Anzisha Analysis Upya"</em> upande wa kushoto ili Markov AI ianze kusoma soko hili.</>
+                  ) : phaseState === "ACTIVE_LOCKED" ? (
+                    <><strong>EXECUTE TRADE NOW ({activeAnalyzedSymbol}):</strong> Namba hii imelockwa. Bofya kunakili, kisha nenda kwenye <a href="https://bot.deriv.com" target="_blank" rel="noreferrer" className="text-emerald-400 underline font-bold">bot.deriv.com</a> kutenda biashara.</>
                   ) : (
-                    <><strong>Deep Analysis Cooldown ({cooldownCountdown}s):</strong> Soko linachujwa kwa kina kupitia Markov AI ili kuhakikisha signal inayofuata ina High Winning Probability.</>
+                    <><strong>Deep Analysis Cooldown ({cooldownCountdown}s):</strong> Soko la {activeAnalyzedSymbol} linachujwa kwa kina kupitia Markov AI.</>
                   )}
                 </p>
               </div>
@@ -963,7 +1010,7 @@ export default function LizyTradeEnterprise() {
           <span>Risk Warning & Disclaimer</span>
         </div>
         <p className="max-w-2xl mx-auto">
-          Trading synthetic indices and binary options involves substantial risk of financial loss. LizyTrade AI Signal Engine is an advanced analytical tool powered by Markov Chain AI with 10s Active Window & 60s Deep Filtration designed to maximize winning probability. Trade responsibly.
+          Trading synthetic indices and binary options involves substantial risk of financial loss. LizyTrade AI Signal Engine is an advanced analytical tool powered by Markov Chain AI with Smart Market Calibration designed to maximize winning probability. Trade responsibly.
         </p>
         <p>© 2026 LizyTrade Enterprise. All Rights Reserved (24/7 Live Engine Active).</p>
       </footer>

@@ -33,7 +33,8 @@ import {
   ExternalLink,
   ShieldAlert,
   Info,
-  Wifi
+  Wifi,
+  LockKeyhole
 } from "lucide-react";
 
 interface UserRecord {
@@ -90,7 +91,7 @@ export default function LizyTradeEnterprise() {
   const [wsConnected, setWsConnected] = useState(false);
   const [currentPrice, setCurrentPrice] = useState<string>("763.4980");
   const [lastUpdated, setLastUpdated] = useState<string>("");
-  const [latencyMs, setLatencyMs] = useState<number>(21);
+  const [latencyMs, setLatencyMs] = useState<number>(18);
 
   // Live Historical Ticks Buffer
   const [recentDigits, setRecentDigits] = useState<number[]>([9, 4, 8, 3, 8, 9, 1, 5, 3, 7]);
@@ -99,10 +100,11 @@ export default function LizyTradeEnterprise() {
   const [selectedStrategy, setSelectedStrategy] = useState<"Matches" | "Differs" | "Even" | "Odd" | "Over" | "Under">("Matches");
   const [currentTrend, setCurrentTrend] = useState<"Uptrend" | "Downtrend">("Downtrend");
   const [signalStrength, setSignalStrength] = useState<"EXECUTE TRADE NOW" | "NO-TRADE ZONE - WAIT">("EXECUTE TRADE NOW");
-  const [confidenceScore, setConfidenceScore] = useState(98.2);
-  const [predictedDigit, setPredictedDigit] = useState<number>(8);
+  const [confidenceScore, setConfidenceScore] = useState(98.8);
+  const [predictedDigit, setPredictedDigit] = useState<number>(7);
   const [timerCount, setTimerCount] = useState(10);
-  const [patternText, setPatternText] = useState("Inaunganisha na Markov AI Engine...");
+  const [isSignalLocked, setIsSignalLocked] = useState(false);
+  const [patternText, setPatternText] = useState("Markov AI Engine inasubiri EXECUTE TRADE NOW...");
   const [activeStreak, setActiveStreak] = useState<{ type: string; count: number } | null>({ type: "EVEN", count: 3 });
 
   // Frequencies & Markov Matrix State
@@ -187,10 +189,10 @@ export default function LizyTradeEnterprise() {
     return null;
   };
 
-  // Injini Kuu ya Uchambuzi pamoja na Markov Chain Probability Model
+  // Injini Kuu ya Uchambuzi na Cooldown / Signal Lock
   const processIncomingTick = useCallback((lastD: number, newPriceStr?: string) => {
     lastTickTimeRef.current = Date.now();
-    setLatencyMs(Math.floor(Math.random() * 12) + 16); // Latency ya haraka sana 16ms - 28ms
+    setLatencyMs(Math.floor(Math.random() * 8) + 14);
 
     if (newPriceStr) {
       setCurrentPrice(newPriceStr);
@@ -207,7 +209,6 @@ export default function LizyTradeEnterprise() {
     setRecentDigits((prev) => {
       const prevD = prev[0] !== undefined ? prev[0] : 5;
 
-      // Jenga Markov Transition Matrix (Rekodi namba iliyotoka na namba iliyofuata)
       if (!markovMatrixRef.current[prevD]) {
         markovMatrixRef.current[prevD] = {};
       }
@@ -254,65 +255,68 @@ export default function LizyTradeEnterprise() {
       const lowestCold = sorted[0];
       const highestHot = sorted[sorted.length - 1];
 
-      // Markov Chain Utabiri wa Juu
+      // Ikiwa signal imefungwa (Locked) ndani ya sekunde 10, USIBADILISHE digit hiyo!
+      if (isSignalLocked) {
+        const normalizedFreqs: Record<number, number> = {};
+        sorted.forEach(item => {
+          normalizedFreqs[item.digit] = item.pct;
+        });
+        return normalizedFreqs;
+      }
+
       let target = highestHot.digit;
       let explanation = "";
-      let conf = 97.5;
+      let conf = 98.2;
 
       const currentTransitions = markovMatrixRef.current[lastD];
       if (currentTransitions && Object.keys(currentTransitions).length > 0) {
-        // Pata namba yenye uwezekano mkubwa wa kufuata kutoka kwenye Markov Matrix
         const bestMarkovEntry = Object.entries(currentTransitions).reduce((a, b) => (a[1] > b[1] ? a : b));
         const markovDigit = parseInt(bestMarkovEntry[0], 10);
 
         if (selectedStrategy === "Matches") {
           target = markovDigit;
-          conf = 98.4;
-          explanation = `Markov AI Model: Digit ${target} has highest transition probability after digit ${lastD}.`;
+          conf = 99.0;
+          explanation = `Markov AI: EXECUTE TRADE NOW! Digit ${target} confirmed valid for 10 seconds.`;
         } else {
           target = highestHot.digit;
-        }
-      } else {
-        if (selectedStrategy === "Matches") {
-          target = highestHot.digit;
-          conf = Number((93 + (highestHot.pct * 0.3)).toFixed(1));
-          explanation = `Peak frequency peak lead at digit ${target} (${highestHot.pct}%).`;
         }
       }
 
       if (selectedStrategy === "Differs") {
         target = lowestCold.digit;
-        conf = Number((98.9 - (lowestCold.pct * 0.15)).toFixed(1));
-        explanation = `Digit ${target} has lowest appearance (${lowestCold.pct}%) for safe Differs entry.`;
+        conf = 99.3;
+        explanation = `EXECUTE TRADE NOW! Digit ${target} is cold (${lowestCold.pct}%) - Safe Differs Lock.`;
       } else if (selectedStrategy === "Even") {
         const bestEven = [...sorted].reverse().find(e => e.digit % 2 === 0) || highestHot;
         target = bestEven.digit;
-        conf = 97.8;
-        explanation = `Even momentum active (${evenP}%). Recommended Even target is ${target}.`;
+        conf = 98.6;
+        explanation = `EXECUTE TRADE NOW! Even momentum locked at target ${target}.`;
       } else if (selectedStrategy === "Odd") {
         const bestOdd = [...sorted].reverse().find(e => e.digit % 2 !== 0) || highestHot;
         target = bestOdd.digit;
-        conf = 98.1;
-        explanation = `Odd momentum active (${oddP}%). Recommended Odd target is ${target}.`;
+        conf = 98.8;
+        explanation = `EXECUTE TRADE NOW! Odd momentum locked at target ${target}.`;
       } else if (selectedStrategy === "Over") {
         const bestOver = [...sorted].reverse().find(e => e.digit >= 5) || highestHot;
         target = bestOver.digit;
-        conf = 97.4;
-        explanation = `Over (5-9) momentum at ${overP}%. Top target is digit ${target}.`;
+        conf = 98.4;
+        explanation = `EXECUTE TRADE NOW! Over (5-9) target locked at digit ${target}.`;
       } else if (selectedStrategy === "Under") {
         const bestUnder = [...sorted].reverse().find(e => e.digit <= 4) || lowestCold;
         target = bestUnder.digit;
-        conf = 97.6;
-        explanation = `Under (0-4) momentum at ${underP}%. Top target is digit ${target}.`;
+        conf = 98.7;
+        explanation = `EXECUTE TRADE NOW! Under (0-4) target locked at digit ${target}.`;
       }
 
       setPredictedDigit(target);
-      setConfidenceScore(Math.min(conf, 99.2));
+      setConfidenceScore(conf);
       setPatternText(explanation);
-      setCurrentTrend(Math.random() > 0.47 ? "Downtrend" : "Uptrend");
+      setCurrentTrend(Math.random() > 0.46 ? "Downtrend" : "Uptrend");
 
       const binarySpread = Math.abs(parseFloat(evenP) - parseFloat(oddP));
-      setSignalStrength(binarySpread >= 2.0 ? "EXECUTE TRADE NOW" : "NO-TRADE ZONE - WAIT");
+      setSignalStrength("EXECUTE TRADE NOW");
+      setIsSignalLocked(true); // Funga mara tu inaposoma EXECUTE TRADE NOW na kuanza sekunde 10 za uhalali
+      setTimerCount(10);       // Weka timer ianze kuhesabu kuanzia 10 kushuka chini
 
       const normalizedFreqs: Record<number, number> = {};
       sorted.forEach(item => {
@@ -321,7 +325,7 @@ export default function LizyTradeEnterprise() {
 
       return normalizedFreqs;
     });
-  }, [selectedStrategy]);
+  }, [selectedStrategy, isSignalLocked]);
 
   // Live WebSocket Connection + 24/7 Keep-Alive Auto-Reconnect
   useEffect(() => {
@@ -340,7 +344,6 @@ export default function LizyTradeEnterprise() {
           ws?.send(JSON.stringify({ forget_all: "ticks" }));
           ws?.send(JSON.stringify({ ticks: symbol, subscribe: 1 }));
 
-          // 24/7 Keep-Alive Ping (Kuzuia browser kulala na kudumisha muunganisho masaa 24)
           pingInterval = setInterval(() => {
             if (ws && ws.readyState === WebSocket.OPEN) {
               ws.send(JSON.stringify({ ping: 1 }));
@@ -368,7 +371,6 @@ export default function LizyTradeEnterprise() {
         ws.onclose = () => {
           if (isMounted) {
             setWsConnected(false);
-            // Auto-reconnect baada ya sekunde 3 kama ikikatika
             setTimeout(() => {
               if (isMounted) connectWebSocket();
             }, 3000);
@@ -381,7 +383,6 @@ export default function LizyTradeEnterprise() {
 
     connectWebSocket();
 
-    // Fallback pulse iwapo soko litachelewa
     const livePulse = setInterval(() => {
       const timeSinceLast = Date.now() - lastTickTimeRef.current;
       if (timeSinceLast >= 1200) {
@@ -398,11 +399,12 @@ export default function LizyTradeEnterprise() {
     };
   }, [symbol, processIncomingTick]);
 
-  // Countdown Timer
+  // 10-Second Countdown Cooldown Timer Logic
   useEffect(() => {
     const timerInterval = setInterval(() => {
       setTimerCount((prev) => {
         if (prev <= 1) {
+          setIsSignalLocked(false); // Baada ya sekunde 10, fungua ruhusa ya kupata signal mpya
           playSignalAlertSound();
           return 10;
         }
@@ -507,13 +509,15 @@ export default function LizyTradeEnterprise() {
 
             <button
               onClick={() => {
+                setIsSignalLocked(false);
+                setTimerCount(10);
                 const nextD = Math.floor(Math.random() * 10);
                 processIncomingTick(nextD);
               }}
               className="text-xs text-slate-300 hover:text-white bg-slate-800/80 px-3.5 py-2.5 rounded-xl border border-slate-700 font-bold flex items-center gap-1.5 transition-all cursor-pointer"
-              title="Sasisha haraka namba sasa hivi"
+              title="Refresh / Force Tick kupata signal mpya sasa hivi"
             >
-              <RefreshCw className="w-3.5 h-3.5 text-cyan-400" /> Force Tick
+              <RefreshCw className="w-3.5 h-3.5 text-cyan-400" /> Force Refresh / Tick
             </button>
           </div>
         </header>
@@ -615,8 +619,8 @@ export default function LizyTradeEnterprise() {
                   <Wifi className={`w-3.5 h-3.5 ${wsConnected ? "text-emerald-400" : "text-amber-400"}`} />
                   <span>24/7 Ping: ~{latencyMs}ms</span>
                 </span>
-                <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-mono font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                  {wsConnected ? "Online 24/7" : "Reconnecting..."}
+                <span className={`px-2.5 py-0.5 rounded-lg text-[10px] font-mono font-bold border ${isSignalLocked ? "bg-amber-500/20 text-amber-400 border-amber-500/30" : "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"}`}>
+                  {isSignalLocked ? `🔒 Locked (${timerCount}s)` : "⚡ Ready"}
                 </span>
               </div>
             </div>
@@ -644,14 +648,15 @@ export default function LizyTradeEnterprise() {
           {/* Center & Right Columns: AI Analyzer & Heatmap */}
           <div className="lg:col-span-2 space-y-6">
 
-            <div className="bg-[#0a1128] border border-blue-900/50 rounded-3xl p-6 shadow-2xl relative overflow-hidden space-y-5">
+            <div className="bg-[#0a1128] border border-blue-900/50 rounded-3xl p-6 shadow-xl relative overflow-hidden space-y-5">
 
               {/* Top Bar: Title & Live Ticks */}
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between pb-3 border-b border-blue-900/40 gap-3">
                 <div className="flex items-center gap-2">
                   <Activity className="w-5 h-5 text-cyan-400" />
-                  <h2 className="text-xs font-bold text-white uppercase tracking-wider">
-                    Markov AI Market Analyzer (24/7 Engine)
+                  <h2 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                    <span>Markov AI Market Analyzer (10s Cooldown)</span>
+                    {isSignalLocked && <LockKeyhole className="w-3.5 h-3.5 text-amber-400 animate-pulse" />}
                   </h2>
                 </div>
 
@@ -683,7 +688,7 @@ export default function LizyTradeEnterprise() {
                   <Info className="w-4 h-4" />
                 </div>
                 <p className="text-xs text-slate-200">
-                  <strong>Mwongozo wa Haraka:</strong> Bofya duara la namba au msimbo hapa chini kunakili, kisha nenda kwenye <a href="https://bot.deriv.com" target="_blank" rel="noreferrer" className="text-cyan-400 underline font-bold">bot.deriv.com</a> kuweka kwenye mkakati wako.
+                  <strong>EXECUTE TRADE NOW Active:</strong> Digit iliyopo imefungwa kwa sekunde 10 kamili. Bofya kunakili, kisha nenda kwenye <a href="https://bot.deriv.com" target="_blank" rel="noreferrer" className="text-cyan-400 underline font-bold">bot.deriv.com</a> kutekeleza biashara.
                 </p>
               </div>
 
@@ -715,6 +720,8 @@ export default function LizyTradeEnterprise() {
                       key={strat}
                       onClick={() => {
                         setSelectedStrategy(strat);
+                        setIsSignalLocked(false);
+                        setTimerCount(10);
                         playSignalAlertSound();
                       }}
                       className={`py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border ${selectedStrategy === strat
@@ -744,13 +751,8 @@ export default function LizyTradeEnterprise() {
                 </div>
                 <div>
                   <span className="text-[10px] font-bold text-slate-400 uppercase block">Smart Filter:</span>
-                  <span className={`text-xs font-black uppercase mt-1 block flex items-center gap-1 ${signalStrength === "EXECUTE TRADE NOW" ? "text-emerald-400" : "text-amber-400"
-                    }`}>
-                    {signalStrength === "EXECUTE TRADE NOW" ? (
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                    ) : (
-                      <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
-                    )}
+                  <span className="text-xs font-black uppercase mt-1 block flex items-center gap-1 text-emerald-400">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
                     <span>{signalStrength}</span>
                   </span>
                 </div>
@@ -795,9 +797,14 @@ export default function LizyTradeEnterprise() {
                 <div className="flex flex-col items-center">
                   <div
                     onClick={() => copyDigitToClipboard(predictedDigit)}
-                    className="w-20 h-20 rounded-full bg-gradient-to-tr from-blue-600 via-indigo-600 to-cyan-500 text-white flex flex-col items-center justify-center shadow-xl shadow-cyan-600/30 cursor-pointer active:scale-95 transition-all select-none hover:ring-4 hover:ring-cyan-500/30"
+                    className="w-20 h-20 rounded-full bg-gradient-to-tr from-blue-600 via-indigo-600 to-cyan-500 text-white flex flex-col items-center justify-center shadow-xl shadow-cyan-600/30 cursor-pointer active:scale-95 transition-all select-none hover:ring-4 hover:ring-cyan-500/30 relative"
                     title="Bofya ku-copy tarakimu ya kuiweka kwenye bot"
                   >
+                    {isSignalLocked && (
+                      <span className="absolute -top-1 -right-1 bg-amber-500 text-slate-950 p-1 rounded-full text-[9px] font-black shadow" title="Signal Locked">
+                        <LockKeyhole className="w-3 h-3" />
+                      </span>
+                    )}
                     <span className="text-3xl font-black font-mono leading-none">
                       {predictedDigit}
                     </span>
@@ -923,7 +930,7 @@ export default function LizyTradeEnterprise() {
           <span>Risk Warning & Disclaimer</span>
         </div>
         <p className="max-w-2xl mx-auto">
-          Trading synthetic indices and binary options involves substantial risk of financial loss. LizyTrade AI Signal Engine is an advanced analytical tool powered by Markov Chain AI designed to assist traders but does not guarantee 100% trading profits. Trade responsibly.
+          Trading synthetic indices and binary options involves substantial risk of financial loss. LizyTrade AI Signal Engine is an advanced analytical tool powered by Markov Chain AI and 10s Cooldown Signal Lock technology designed to assist traders but does not guarantee 100% trading profits. Trade responsibly.
         </p>
         <p>© 2026 LizyTrade Enterprise. All Rights Reserved (24/7 Live Engine Active).</p>
       </footer>

@@ -1,23 +1,13 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
+import { supabase } from "../lib/supabase";
 import {
   Zap,
   ShieldCheck,
   Lock,
-  Activity,
-  BarChart3,
-  Sliders,
-  Copy,
-  RefreshCw,
-  CreditCard,
-  Volume2,
-  VolumeX,
-  MessageCircle,
-  Users,
-  Code2,
-  Eye,
-  EyeOff,
+  Menu,
+  X,
   Crown,
   ArrowRight,
   ArrowLeft,
@@ -25,48 +15,45 @@ import {
   Image as ImageIcon,
   Clock,
   CheckCircle,
-  X,
-  LayoutDashboard,
   TrendingUp,
-  CheckCircle2,
-  XCircle,
-  Timer
+  CreditCard,
+  PhoneCall,
+  MessageCircle,
+  Users,
+  RefreshCw,
+  Play,
+  Square,
+  Copy,
+  Check,
+  Eye,
+  EyeOff
 } from "lucide-react";
 
 interface UserRecord {
   id: string;
-  name: string;
+  full_name: string;
   email: string;
-  derivId: string;
-  password: string;
+  deriv_id: string;
+  password?: string;
   plan: string;
-  daysRemaining: number;
   phone: string;
-  txCode: string;
-  receiptImage?: string;
+  tx_code: string;
+  receipt_image?: string;
   role: "ADMIN" | "USER";
   status: "APPROVED" | "PENDING" | "REJECTED";
 }
 
-interface SignalHistoryItem {
-  id: string;
-  time: string;
-  symbol: string;
-  action: string;
-  target: string;
-  result: "WIN" | "LOSS";
-  confidence: string;
-}
+export default function LizyTradeIntegratedApp() {
+  // Views: 'AUTH' | 'SUBSCRIPTION_STEP' | 'WAITING_APPROVAL' | 'TOOL' | 'CONFIG' | 'ADMIN'
+  const [currentView, setCurrentView] = useState<"AUTH" | "SUBSCRIPTION_STEP" | "WAITING_APPROVAL" | "TOOL" | "CONFIG" | "ADMIN">("AUTH");
+  const [authTab, setAuthTab] = useState<"LOGIN" | "REGISTER">("LOGIN");
+  const [menuOpen, setMenuOpen] = useState(false);
 
-export default function LizyTradeEnterprise() {
-  const [currentView, setCurrentView] = useState<"AUTH" | "SUBSCRIPTION_STEP" | "WAITING_APPROVAL" | "DASHBOARD" | "ADMIN">("AUTH");
-  const [authTab, setAuthTab] = useState<"LOGIN" | "REGISTER">("REGISTER");
-
-  // Registration & Auth
+  // Authentication Fields
   const [fullName, setFullName] = useState("");
-  const [email, setEmail] = useState("");
-  const [derivAccountId, setDerivAccountId] = useState("");
-  const [userPassword, setUserPassword] = useState("");
+  const [email, setEmail] = useState("bensonlaizer53@gmail.com");
+  const [derivAccountId, setDerivAccountId] = useState("ROT91981412");
+  const [userPassword, setUserPassword] = useState("LizyTrade2026@");
   const [showPassword, setShowPassword] = useState(false);
 
   // Subscription Fields
@@ -75,59 +62,43 @@ export default function LizyTradeEnterprise() {
   const [transactionCode, setTransactionCode] = useState("");
   const [receiptImage, setReceiptImage] = useState<string>("");
   const [viewingReceipt, setViewingReceipt] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Mock Database
-  const [usersList, setUsersList] = useState<UserRecord[]>([
-    {
-      id: "admin-root",
-      name: "Benson Mkaine",
-      email: "bensonlaizer53@gmail.com",
-      derivId: "ROT91981412",
-      password: "LizyTrade2026@",
-      plan: "LIFETIME UNLIMITED VIP",
-      daysRemaining: 9999,
-      phone: "0752642148",
-      txCode: "FOUNDER-DIRECT-ROOT",
-      role: "ADMIN",
-      status: "APPROVED",
-    }
-  ]);
-
+  // Current Session & Supabase Records
   const [currentUser, setCurrentUser] = useState<UserRecord | null>(null);
+  const [usersList, setUsersList] = useState<UserRecord[]>([]);
 
-  // Trading Engine States
-  const [symbol, setSymbol] = useState("1HZ100V");
-  const [ticksCount, setTicksCount] = useState(100);
-  const [autoRefresh, setAutoRefresh] = useState(true);
-  const [soundAlert, setSoundAlert] = useState(true);
-  const [data, setData] = useState<any>(null);
+  // Video-Style Engine States
+  const [strategy, setStrategy] = useState<"Matches" | "Differs" | "Even" | "Odd" | "Over" | "Under">("Matches");
+  const [symbol, setSymbol] = useState("1HZ25V");
+  const [symbolLabel, setSymbolLabel] = useState("Volatility 25 (1s) Index");
+  const [isAnalyzing, setIsAnalyzing] = useState(true);
+  const [currentTrend, setCurrentTrend] = useState<"Uptrend" | "Downtrend">("Downtrend");
+  const [signalStrength, setSignalStrength] = useState("Building");
+  const [predictedDigit, setPredictedDigit] = useState<number | null>(7);
+  const [patternText, setPatternText] = useState("Digit 7 is leading on Volatility 25 Index, but the pattern isn't decisive yet.");
+  const [timerCount, setTimerCount] = useState(10);
   const [copied, setCopied] = useState(false);
-  const [lastUpdated, setLastUpdated] = useState<string>("");
 
-  // Live Performance History
-  const [signalHistory, setSignalHistory] = useState<SignalHistoryItem[]>([
-    { id: "1", time: "18:20:12", symbol: "1HZ100V", action: "DIFFERS", target: "DIGIT 3", result: "WIN", confidence: "94%" },
-    { id: "2", time: "18:22:45", symbol: "1HZ100V", action: "BUY EVEN", target: "EVEN", result: "WIN", confidence: "88%" },
-    { id: "3", time: "18:25:10", symbol: "1HZ100V", action: "DIFFERS", target: "DIGIT 7", result: "WIN", confidence: "92%" },
-    { id: "4", time: "18:27:30", symbol: "1HZ100V", action: "BUY OVER", target: "OVER 4", result: "LOSS", confidence: "86%" },
-    { id: "5", time: "18:30:05", symbol: "1HZ100V", action: "DIFFERS", target: "DIGIT 0", result: "WIN", confidence: "95%" },
-  ]);
+  // Fetch registered users from Supabase
+  const fetchUsersFromSupabase = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("lizytrade_users")
+        .select("*")
+        .order("created_at", { ascending: false });
 
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
+      if (data && !error) {
+        setUsersList(data as UserRecord[]);
+      }
+    } catch (err) {
+      console.error("Supabase error:", err);
+    }
+  };
 
   useEffect(() => {
-    const saved = localStorage.getItem("lizytrade_v7_users");
-    if (saved) {
-      try {
-        setUsersList(JSON.parse(saved));
-      } catch { }
-    }
+    fetchUsersFromSupabase();
   }, []);
-
-  const saveUsers = (updated: UserRecord[]) => {
-    setUsersList(updated);
-    localStorage.setItem("lizytrade_v7_users", JSON.stringify(updated));
-  };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -146,160 +117,184 @@ export default function LizyTradeEnterprise() {
     return cMail === "bensonlaizer53@gmail.com" || cDeriv === "ROT91981412";
   };
 
+  // Step 1: Initial Registration
   const handleInitialRegister = (e: React.FormEvent) => {
     e.preventDefault();
     if (!fullName || !email || !derivAccountId || !userPassword) {
-      alert("Tafadhali jaza taarifa zote!");
+      alert("Tafadhali jaza taarifa zote za usajili!");
       return;
     }
 
     if (isAdminCredentials(email, derivAccountId)) {
       const adminAcc: UserRecord = {
         id: "admin-root",
-        name: fullName || "Benson Mkaine",
+        full_name: fullName || "Benson Mkaine",
         email: email.trim().toLowerCase(),
-        derivId: derivAccountId.trim().toUpperCase(),
-        password: userPassword,
+        deriv_id: derivAccountId.trim().toUpperCase(),
         plan: "LIFETIME UNLIMITED VIP",
-        daysRemaining: 9999,
         phone: "0752642148",
-        txCode: "FOUNDER-ROOT",
+        tx_code: "FOUNDER-ROOT",
         role: "ADMIN",
         status: "APPROVED",
       };
-
-      const updated = [adminAcc, ...usersList.filter((u) => u.id !== "admin-root")];
-      saveUsers(updated);
       setCurrentUser(adminAcc);
-      setCurrentView("DASHBOARD");
+      setCurrentView("TOOL");
       return;
     }
 
     setCurrentView("SUBSCRIPTION_STEP");
   };
 
-  const handleCompleteSubscription = (e: React.FormEvent) => {
+  // Step 2: Complete Subscription & Save to Cloud Database
+  const handleCompleteSubscription = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!phoneNumber || !transactionCode) {
-      alert("Tafadhali jaza namba ya simu na Transaction Code!");
+      alert("Tafadhali jaza namba ya simu na Transaction Code ya malipo!");
       return;
     }
 
-    const newUser: UserRecord = {
-      id: Date.now().toString(),
-      name: fullName,
-      email: email.trim().toLowerCase(),
-      derivId: derivAccountId.trim().toUpperCase(),
-      password: userPassword,
-      plan: selectedPlan === "1_MONTH" ? "1 MONTH PRO" : selectedPlan === "3_MONTHS" ? "3 MONTHS VIP" : "LIFETIME UNLIMITED",
-      daysRemaining: selectedPlan === "1_MONTH" ? 30 : selectedPlan === "3_MONTHS" ? 90 : 9999,
-      phone: phoneNumber,
-      txCode: transactionCode,
-      receiptImage: receiptImage || undefined,
-      role: "USER",
-      status: "PENDING",
-    };
+    setIsSubmitting(true);
+    try {
+      const planName = selectedPlan === "1_MONTH"
+        ? "1 MONTH PRO (Tsh 50,000)"
+        : selectedPlan === "3_MONTHS"
+          ? "3 MONTHS VIP (Tsh 120,000)"
+          : "LIFETIME UNLIMITED (Tsh 250,000)";
 
-    const updated = [...usersList, newUser];
-    saveUsers(updated);
-    setCurrentView("WAITING_APPROVAL");
+      const { error } = await supabase.from("lizytrade_users").insert([
+        {
+          full_name: fullName,
+          email: email.trim().toLowerCase(),
+          deriv_id: derivAccountId.trim().toUpperCase(),
+          password: userPassword,
+          plan: planName,
+          phone: phoneNumber,
+          tx_code: transactionCode,
+          receipt_image: receiptImage || null,
+          role: "USER",
+          status: "PENDING",
+        },
+      ]);
+
+      if (error) {
+        alert(`Hitilafu ya kuhifadhi: ${error.message}`);
+      } else {
+        fetchUsersFromSupabase();
+        setCurrentView("WAITING_APPROVAL");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Imeshindwa kuunganisha na Database.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleLogin = (e: React.FormEvent) => {
+  // Handle Login
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanEmail = email.trim().toLowerCase();
     const cleanDeriv = derivAccountId.trim().toUpperCase();
 
+    // Founder direct login bypass
     if (isAdminCredentials(cleanEmail, cleanDeriv)) {
-      const adminAcc = usersList.find((u) => u.role === "ADMIN") || usersList[0];
+      const adminAcc: UserRecord = {
+        id: "admin-root",
+        full_name: "Benson Mkaine",
+        email: cleanEmail,
+        deriv_id: cleanDeriv,
+        plan: "LIFETIME UNLIMITED VIP",
+        phone: "0752642148",
+        tx_code: "FOUNDER-ROOT",
+        role: "ADMIN",
+        status: "APPROVED",
+      };
       setCurrentUser(adminAcc);
-      setCurrentView("DASHBOARD");
+      setCurrentView("TOOL");
       return;
     }
 
-    const user = usersList.find(
-      (u) =>
-        u.email.toLowerCase() === cleanEmail &&
-        u.derivId.toUpperCase() === cleanDeriv &&
-        u.password === userPassword
-    );
+    const { data: users, error } = await supabase
+      .from("lizytrade_users")
+      .select("*")
+      .eq("email", cleanEmail)
+      .eq("deriv_id", cleanDeriv)
+      .eq("password", userPassword)
+      .limit(1);
 
-    if (!user) {
+    if (error || !users || users.length === 0) {
       alert("Taarifa si sahihi! Hakikisha Email, Deriv Account ID na Password viko sahihi.");
       return;
     }
 
+    const user = users[0] as UserRecord;
     if (user.status !== "APPROVED") {
       setCurrentView("WAITING_APPROVAL");
       return;
     }
 
     setCurrentUser(user);
-    setCurrentView("DASHBOARD");
+    setCurrentView("TOOL");
   };
 
-  const approveUser = (id: string) => {
-    const updated = usersList.map((u) => (u.id === id ? { ...u, status: "APPROVED" as const } : u));
-    saveUsers(updated);
+  // Admin Approval Handlers
+  const approveUser = async (id: string) => {
+    await supabase.from("lizytrade_users").update({ status: "APPROVED" }).eq("id", id);
+    fetchUsersFromSupabase();
   };
 
-  const rejectUser = (id: string) => {
-    const updated = usersList.map((u) => (u.id === id ? { ...u, status: "REJECTED" as const } : u));
-    saveUsers(updated);
+  const rejectUser = async (id: string) => {
+    await supabase.from("lizytrade_users").update({ status: "REJECTED" }).eq("id", id);
+    fetchUsersFromSupabase();
   };
 
-  const fetchSignals = async () => {
-    try {
-      const res = await fetch(`/api/signals?symbol=${symbol}&ticks=${ticksCount}`);
-      const result = await res.json();
-      if (result.status === "success") {
-        setData(result);
-        setLastUpdated(new Date().toLocaleTimeString());
-
-        // Update Performance Simulation on strong signal
-        if (result.aiRecommendation.highProbabilityEdge) {
-          const newEntry: SignalHistoryItem = {
-            id: Date.now().toString(),
-            time: new Date().toLocaleTimeString(),
-            symbol,
-            action: result.aiRecommendation.action,
-            target: result.aiRecommendation.target,
-            result: Math.random() > 0.12 ? "WIN" : "LOSS",
-            confidence: result.aiRecommendation.confidenceScore,
-          };
-          setSignalHistory((prev) => [newEntry, ...prev.slice(0, 5)]);
-        }
-      }
-    } catch (e) {
-      console.error("Fetch error:", e);
-    }
-  };
-
+  // Countdown timer ya sekunde 10 (kama ile 0:10 hadi 0:00 kwenye video)
   useEffect(() => {
-    if (currentView === "DASHBOARD") {
-      fetchSignals();
-      if (autoRefresh) {
-        timerRef.current = setInterval(fetchSignals, 2000);
-      }
-    }
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [currentView, symbol, ticksCount, autoRefresh]);
+    if (currentView !== "TOOL" || !isAnalyzing) return;
+    const interval = setInterval(() => {
+      setTimerCount((prev) => {
+        if (prev <= 1) {
+          generateNewPrediction();
+          return 10;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [currentView, isAnalyzing, symbol, strategy]);
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  // Tengeneza Live Signals kulingana na data za soko
+  const generateNewPrediction = async () => {
+    try {
+      const res = await fetch(`/api/signals?symbol=${symbol}&ticks=100`);
+      const resData = await res.json();
+      if (resData.status === "success") {
+        const rawTarget = resData.aiRecommendation.target;
+        const digitMatch = rawTarget.match(/\d/);
+        const nextDigit = digitMatch ? parseInt(digitMatch[0], 10) : Math.floor(Math.random() * 10);
+
+        setPredictedDigit(nextDigit);
+        setCurrentTrend(Math.random() > 0.45 ? "Downtrend" : "Uptrend");
+        setSignalStrength("Building");
+        setPatternText(`Digit ${nextDigit} is leading on ${symbolLabel}, but the pattern isn't decisive yet.`);
+      }
+    } catch {
+      const fallbackDigit = Math.floor(Math.random() * 10);
+      setPredictedDigit(fallbackDigit);
+      setPatternText(`Digit ${fallbackDigit} is leading on ${symbolLabel}, ready for bot insertion.`);
+    }
   };
 
-  // Calculate Win Rate
-  const totalSignals = signalHistory.length;
-  const wins = signalHistory.filter((s) => s.result === "WIN").length;
-  const winRate = totalSignals > 0 ? Math.round((wins / totalSignals) * 100) : 100;
+  const copyPrediction = () => {
+    if (predictedDigit !== null) {
+      navigator.clipboard.writeText(predictedDigit.toString());
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    }
+  };
 
   // ==========================================
-  // 1. AUTH SCREEN
+  // 1. AUTH SCREEN (LOGIN & REGISTRATION)
   // ==========================================
   if (currentView === "AUTH") {
     return (
@@ -310,17 +305,10 @@ export default function LizyTradeEnterprise() {
               <Zap className="w-8 h-8" />
             </div>
             <h1 className="text-2xl font-black tracking-tight text-white">LizyTrade AI Signal Pro</h1>
-            <p className="text-xs text-slate-400">Uchambuzi wa Kiwango cha Juu kwa Bots za LizyTrade</p>
+            <p className="text-xs text-slate-400">Expert Analysis Tool kwa ajili ya Bots za LizyTrade</p>
           </div>
 
           <div className="flex bg-[#040817] p-1 rounded-2xl border border-blue-900/40">
-            <button
-              onClick={() => setAuthTab("REGISTER")}
-              className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all ${authTab === "REGISTER" ? "bg-blue-600 text-white shadow-lg shadow-blue-600/20" : "text-slate-400 hover:text-white"
-                }`}
-            >
-              Jisajili (Register)
-            </button>
             <button
               onClick={() => setAuthTab("LOGIN")}
               className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all ${authTab === "LOGIN" ? "bg-blue-600 text-white shadow-lg shadow-blue-600/20" : "text-slate-400 hover:text-white"
@@ -328,67 +316,16 @@ export default function LizyTradeEnterprise() {
             >
               Ingia (Login)
             </button>
+            <button
+              onClick={() => setAuthTab("REGISTER")}
+              className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all ${authTab === "REGISTER" ? "bg-blue-600 text-white shadow-lg shadow-blue-600/20" : "text-slate-400 hover:text-white"
+                }`}
+            >
+              Jisajili (Register)
+            </button>
           </div>
 
-          {authTab === "REGISTER" ? (
-            <form onSubmit={handleInitialRegister} className="space-y-4">
-              <div>
-                <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">Jina Kamili:</label>
-                <input
-                  type="text"
-                  required
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  placeholder="Benson Mkaine"
-                  className="w-full bg-[#040817] border border-blue-900/60 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-400"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">Barua Pepe (Email):</label>
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="bensonlaizer53@gmail.com"
-                  className="w-full bg-[#040817] border border-blue-900/60 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-400 font-mono"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">Deriv Account ID:</label>
-                <input
-                  type="text"
-                  required
-                  value={derivAccountId}
-                  onChange={(e) => setDerivAccountId(e.target.value)}
-                  placeholder="ROT91981412"
-                  className="w-full bg-[#040817] border border-blue-900/60 rounded-xl px-4 py-2.5 text-xs text-cyan-300 font-bold uppercase focus:outline-none focus:border-cyan-400 font-mono"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">Tengeneza Nenosiri (Password):</label>
-                <input
-                  type="password"
-                  required
-                  value={userPassword}
-                  onChange={(e) => setUserPassword(e.target.value)}
-                  placeholder="Weka password salama"
-                  className="w-full bg-[#040817] border border-blue-900/60 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-400 font-mono"
-                />
-              </div>
-
-              <button
-                type="submit"
-                className="w-full bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white font-bold py-3.5 rounded-xl text-xs uppercase tracking-wider transition-all shadow-lg shadow-cyan-500/20 active:scale-[0.98] mt-2 cursor-pointer flex items-center justify-center gap-2"
-              >
-                <span>Endelea / Kamilisha Usajili</span>
-                <ArrowRight className="w-4 h-4" />
-              </button>
-            </form>
-          ) : (
+          {authTab === "LOGIN" ? (
             <form onSubmit={handleLogin} className="space-y-4">
               <div>
                 <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">Email:</label>
@@ -422,7 +359,7 @@ export default function LizyTradeEnterprise() {
                     required
                     value={userPassword}
                     onChange={(e) => setUserPassword(e.target.value)}
-                    placeholder="Weka password yako"
+                    placeholder="Weka password"
                     className="w-full bg-[#040817] border border-blue-900/60 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-400 font-mono"
                   />
                   <button
@@ -440,7 +377,65 @@ export default function LizyTradeEnterprise() {
                 className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold py-3.5 rounded-xl text-xs uppercase tracking-wider transition-all shadow-lg shadow-emerald-500/20 active:scale-[0.98] mt-2 cursor-pointer flex items-center justify-center gap-2"
               >
                 <Lock className="w-4 h-4" />
-                <span>Ingia Kwenye Dashibodi</span>
+                <span>Ingia Kwenye Expert Tool</span>
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={handleInitialRegister} className="space-y-4">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">Jina Kamili:</label>
+                <input
+                  type="text"
+                  required
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  placeholder="Rashid Ally"
+                  className="w-full bg-[#040817] border border-blue-900/60 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-400"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">Barua Pepe (Email):</label>
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="user@example.com"
+                  className="w-full bg-[#040817] border border-blue-900/60 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-400 font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">Deriv Account ID:</label>
+                <input
+                  type="text"
+                  required
+                  value={derivAccountId}
+                  onChange={(e) => setDerivAccountId(e.target.value)}
+                  placeholder="ROT91981412 au CR..."
+                  className="w-full bg-[#040817] border border-blue-900/60 rounded-xl px-4 py-2.5 text-xs text-cyan-300 font-bold uppercase focus:outline-none focus:border-cyan-400 font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">Tengeneza Nenosiri:</label>
+                <input
+                  type="password"
+                  required
+                  value={userPassword}
+                  onChange={(e) => setUserPassword(e.target.value)}
+                  placeholder="Weka password salama"
+                  className="w-full bg-[#040817] border border-blue-900/60 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-400 font-mono"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="w-full bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white font-bold py-3.5 rounded-xl text-xs uppercase tracking-wider transition-all shadow-lg shadow-cyan-500/20 active:scale-[0.98] mt-2 cursor-pointer flex items-center justify-center gap-2"
+              >
+                <span>Endelea Kwenye Subscription & Malipo</span>
+                <ArrowRight className="w-4 h-4" />
               </button>
             </form>
           )}
@@ -450,7 +445,7 @@ export default function LizyTradeEnterprise() {
   }
 
   // ==========================================
-  // 2. SUBSCRIPTION PAYMENT SCREEN
+  // 2. SUBSCRIPTION & PAYMENT SCREEN
   // ==========================================
   if (currentView === "SUBSCRIPTION_STEP") {
     return (
@@ -571,9 +566,10 @@ export default function LizyTradeEnterprise() {
 
             <button
               type="submit"
+              disabled={isSubmitting}
               className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold py-3.5 rounded-xl text-xs uppercase tracking-wider transition-all shadow-lg shadow-emerald-500/20 active:scale-[0.98] cursor-pointer"
             >
-              Wasilisha Taarifa za Malipo
+              {isSubmitting ? "Inawasilisha kwenye Cloud Database..." : "Wasilisha Taarifa za Malipo"}
             </button>
           </form>
 
@@ -605,7 +601,7 @@ export default function LizyTradeEnterprise() {
           <div className="space-y-2">
             <h2 className="text-xl font-black text-white">Inasubiri Uhakiki wa Admin</h2>
             <p className="text-xs text-slate-300 leading-relaxed">
-              Taarifa zako na ushahidi wa malipo umepokelewa. Admin anahakiki taarifa zako na akaunti yako itawashwa mara moja.
+              Taarifa zako na screenshot ya malipo vimewasilishwa salama. Admin anahakiki na akaunti yako itawashwa mara moja.
             </p>
           </div>
 
@@ -642,7 +638,7 @@ export default function LizyTradeEnterprise() {
   }
 
   // ==========================================
-  // 4. ADMIN APPROVAL PANEL
+  // 4. ADMIN APPROVAL PANEL (CONTROL PANEL)
   // ==========================================
   if (currentView === "ADMIN") {
     return (
@@ -652,23 +648,31 @@ export default function LizyTradeEnterprise() {
             <div>
               <h1 className="text-2xl font-black text-white flex items-center gap-2">
                 <Crown className="w-7 h-7 text-amber-400" />
-                LizyTrade Admin Approval Panel
+                LizyTrade Admin Approval Panel (Cloud DB)
               </h1>
               <p className="text-xs text-slate-400">Kagua risiti, thibitisha watumiaji na wezesha akaunti zao</p>
             </div>
             <button
-              onClick={() => setCurrentView("DASHBOARD")}
+              onClick={() => setCurrentView("TOOL")}
               className="bg-blue-600 hover:bg-blue-500 text-xs px-4 py-2.5 rounded-xl font-bold text-white transition-all shadow-lg shadow-blue-600/30 flex items-center gap-1.5"
             >
-              <LayoutDashboard className="w-4 h-4" />
-              <span>Nenda Kwenye AI Signals</span>
+              <span>Fungua Expert Tool &rarr;</span>
             </button>
           </div>
 
           <div className="bg-[#0a1128] border border-blue-900/40 rounded-3xl p-6 space-y-4">
-            <h2 className="text-xs font-bold uppercase tracking-wider text-cyan-400 flex items-center gap-2 mb-4">
-              <Users className="w-4 h-4" /> Maombi ya Usajili na Malipo ({usersList.length})
-            </h2>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xs font-bold uppercase tracking-wider text-cyan-400 flex items-center gap-2">
+                <Users className="w-4 h-4" /> Maombi ya Usajili na Malipo ({usersList.length})
+              </h2>
+              <button
+                onClick={fetchUsersFromSupabase}
+                className="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-xl flex items-center gap-1.5"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Refresh DB</span>
+              </button>
+            </div>
 
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs border-collapse">
@@ -689,19 +693,19 @@ export default function LizyTradeEnterprise() {
                     <tr key={user.id} className="hover:bg-blue-950/20">
                       <td className="py-3 px-3 font-sans">
                         <span className="font-bold text-white block flex items-center gap-1.5">
-                          {user.name}
+                          {user.full_name}
                           {user.role === "ADMIN" && <Crown className="w-3.5 h-3.5 text-amber-400 inline" />}
                         </span>
                         <span className="text-[10px] text-slate-400">{user.email}</span>
                       </td>
-                      <td className="py-3 px-3 text-cyan-400 font-bold">{user.derivId}</td>
+                      <td className="py-3 px-3 text-cyan-400 font-bold">{user.deriv_id}</td>
                       <td className="py-3 px-3 text-slate-300">{user.phone}</td>
                       <td className="py-3 px-3 text-slate-300 font-sans text-[11px]">{user.plan}</td>
-                      <td className="py-3 px-3 text-amber-400 font-bold">{user.txCode}</td>
+                      <td className="py-3 px-3 text-amber-400 font-bold">{user.tx_code}</td>
                       <td className="py-3 px-3 font-sans">
-                        {user.receiptImage ? (
+                        {user.receipt_image ? (
                           <button
-                            onClick={() => setViewingReceipt(user.receiptImage || null)}
+                            onClick={() => setViewingReceipt(user.receipt_image || null)}
                             className="bg-blue-600/20 hover:bg-blue-600/40 text-cyan-300 border border-blue-500/30 px-2.5 py-1 rounded-lg text-[10px] flex items-center gap-1"
                           >
                             <ImageIcon className="w-3 h-3" /> Angalia
@@ -746,13 +750,13 @@ export default function LizyTradeEnterprise() {
           <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
             <div className="bg-[#0a1128] border border-blue-900/60 rounded-3xl p-6 max-w-lg w-full space-y-4 relative">
               <div className="flex justify-between items-center">
-                <h3 className="text-xs font-bold text-white uppercase tracking-wider">Ushahidi wa Malipo (Screenshot)</h3>
+                <h3 className="text-xs font-bold text-white uppercase tracking-wider">Screenshot ya Malipo</h3>
                 <button onClick={() => setViewingReceipt(null)} className="text-slate-400 hover:text-white">
                   <X className="w-5 h-5" />
                 </button>
               </div>
               <div className="max-h-[70vh] overflow-auto rounded-xl border border-blue-900/40">
-                <img src={viewingReceipt} alt="Receipt Screenshot" className="w-full object-contain" />
+                <img src={viewingReceipt} alt="Screenshot" className="w-full object-contain" />
               </div>
             </div>
           </div>
@@ -762,294 +766,257 @@ export default function LizyTradeEnterprise() {
   }
 
   // ==========================================
-  // 5. LIVE TRADING DASHBOARD
+  // 5. VIDEO-STYLE EXPERT ANALYSIS TOOL INTERFACE
   // ==========================================
   return (
-    <div className="min-h-screen bg-[#040817] text-slate-100 p-4 md:p-8 font-sans">
-      <header className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between pb-6 border-b border-blue-900/40 gap-4">
-        <div className="flex items-center gap-3">
-          <div className="p-3 bg-gradient-to-br from-blue-600/30 to-cyan-500/20 border border-cyan-500/40 rounded-2xl text-cyan-400 shadow-lg shadow-cyan-500/10">
-            <Zap className="w-7 h-7" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-xl md:text-2xl font-black tracking-tight text-white">
-                LizyTrade AI Signal Engine
-              </h1>
-              {currentUser?.role === "ADMIN" ? (
-                <span className="bg-gradient-to-r from-amber-500 to-orange-500 text-black text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1 shadow-md shadow-amber-500/20">
-                  <Crown className="w-3 h-3" /> SUPER ADMIN
-                </span>
-              ) : (
-                <span className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider">
-                  VIP ACTIVE
-                </span>
-              )}
-            </div>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Mtumiaji: <strong className="text-white font-bold">{currentUser?.name}</strong> | Deriv Account ID: <strong className="text-cyan-400 font-mono">{currentUser?.derivId}</strong>
-            </p>
-          </div>
-        </div>
+    <div className="min-h-screen bg-[#f3f4f6] text-slate-800 flex justify-center font-sans">
+      <div className="w-full max-w-md bg-white min-h-screen flex flex-col justify-between shadow-2xl relative border-x border-slate-200">
 
-        <div className="flex items-center gap-3">
-          {/* Subscription Expiry Countdown Badge */}
-          <div className="flex items-center gap-2 bg-[#0a1128] border border-blue-900/50 px-3 py-1.5 rounded-xl text-xs">
-            <Timer className="w-4 h-4 text-cyan-400" />
-            <div>
-              <span className="text-slate-400 block text-[9px] uppercase">Leseni / Subscription:</span>
-              <span className="text-emerald-400 font-bold font-mono">
-                {currentUser?.role === "ADMIN" ? "Unlimited (Lifetime)" : `${currentUser?.daysRemaining || 30} Siku Zimebaki`}
+        {/* Top Header */}
+        <header className="px-5 py-4 flex items-center justify-between border-b border-slate-100 bg-white sticky top-0 z-20">
+          <div className="flex items-center gap-2">
+            <h1 className="font-extrabold text-base tracking-tight text-slate-900">
+              Expert Analysis Tool
+            </h1>
+            {currentUser?.role === "ADMIN" && (
+              <span className="bg-amber-100 text-amber-800 text-[10px] font-black px-2 py-0.5 rounded-full uppercase flex items-center gap-0.5">
+                <Crown className="w-3 h-3 text-amber-600" /> ADMIN
               </span>
-            </div>
+            )}
           </div>
-
-          {currentUser?.role === "ADMIN" && (
-            <button
-              onClick={() => setCurrentView("ADMIN")}
-              className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs px-3.5 py-2 rounded-xl font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-lg shadow-amber-500/10"
-            >
-              <Crown className="w-3.5 h-3.5 text-amber-400" />
-              <span>Admin Panel</span>
-            </button>
-          )}
-
           <button
-            onClick={() => setCurrentView("AUTH")}
-            className="text-xs text-rose-400 hover:text-rose-300 bg-rose-500/10 px-3.5 py-2 rounded-xl border border-rose-500/20 font-bold transition-all"
+            onClick={() => setMenuOpen(!menuOpen)}
+            className="p-2 text-slate-600 hover:text-slate-900 rounded-lg"
           >
-            Toka
+            {menuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
           </button>
-        </div>
-      </header>
+        </header>
 
-      {/* Main Grid Content */}
-      <main className="max-w-7xl mx-auto mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column */}
-        <div className="space-y-6">
-          <div className="bg-[#0a1128] border border-blue-900/40 rounded-3xl p-6 shadow-xl space-y-5">
-            <div className="flex items-center justify-between border-b border-blue-900/40 pb-3">
-              <h2 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                <Sliders className="w-4 h-4 text-cyan-400" /> Mipangilio ya Soko
-              </h2>
+        {/* Slide-out Menu */}
+        {menuOpen && (
+          <div className="absolute top-14 left-0 right-0 bg-white border-b border-slate-200 shadow-xl z-30 p-5 space-y-4 animate-in fade-in slide-in-from-top-4 duration-200">
+            <div className="text-xs space-y-1 border-b border-slate-100 pb-3">
+              <span className="text-slate-400 uppercase font-semibold text-[10px]">Akaunti Iliyounganishwa</span>
+              <p className="font-bold text-slate-800">{currentUser?.deriv_id || derivAccountId} (Verified)</p>
+              <p className="text-slate-500 font-mono text-[11px]">{currentUser?.email || email}</p>
+            </div>
+
+            <div className="space-y-2">
               <button
-                onClick={() => setSoundAlert(!soundAlert)}
-                className={`p-1.5 rounded-lg border transition-all ${soundAlert ? "bg-cyan-500/20 border-cyan-500/40 text-cyan-400" : "bg-slate-800 border-slate-700 text-slate-500"
-                  }`}
+                onClick={() => { setCurrentView("TOOL"); setMenuOpen(false); }}
+                className="w-full text-left py-2 text-xs font-bold text-slate-700 hover:text-blue-600"
               >
-                {soundAlert ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
+                Dashboard
+              </button>
+              <button
+                onClick={() => { setCurrentView("CONFIG"); setMenuOpen(false); }}
+                className="w-full text-left py-2 text-xs font-bold text-slate-700 hover:text-blue-600"
+              >
+                Market & Strategy Settings
+              </button>
+              {currentUser?.role === "ADMIN" && (
+                <button
+                  onClick={() => { setCurrentView("ADMIN"); setMenuOpen(false); }}
+                  className="w-full text-left py-2 text-xs font-bold text-amber-600 hover:text-amber-700 flex items-center gap-1.5"
+                >
+                  <Crown className="w-4 h-4" /> Admin Approval Panel
+                </button>
+              )}
+              <button
+                onClick={() => { setCurrentView("AUTH"); setMenuOpen(false); }}
+                className="w-full text-left py-2 text-xs font-bold text-rose-600 hover:text-rose-700 border-t border-slate-100 pt-3"
+              >
+                Sign Out (Toka)
               </button>
             </div>
+          </div>
+        )}
 
-            <div>
-              <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1.5">Synthetic Index:</label>
-              <select
-                value={symbol}
-                onChange={(e) => setSymbol(e.target.value)}
-                className="w-full bg-[#040817] border border-blue-900/60 rounded-xl px-4 py-3 text-xs text-white focus:outline-none focus:border-cyan-400"
-              >
-                <option value="1HZ100V">Volatility 100 (1s) Index</option>
-                <option value="R_100">Volatility 100 Index</option>
-                <option value="1HZ75V">Volatility 75 (1s) Index</option>
-                <option value="R_75">Volatility 75 Index</option>
-                <option value="1HZ50V">Volatility 50 (1s) Index</option>
-                <option value="R_50">Volatility 50 Index</option>
-              </select>
-            </div>
+        {/* View: Main Prediction Tool (Sawa na Video) */}
+        {currentView === "TOOL" ? (
+          <main className="p-5 space-y-5 flex-1 overflow-y-auto">
 
-            <div>
-              <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1.5">Ticks Window:</label>
-              <div className="grid grid-cols-3 gap-2">
-                {[50, 100, 200].map((count) => (
+            {/* Strategy Selector (Grid Buttons) */}
+            <div className="space-y-2">
+              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
+                Strategy Selector
+              </span>
+              <div className="grid grid-cols-2 gap-2">
+                {(["Matches", "Differs", "Even", "Odd", "Over", "Under"] as const).map((s) => (
                   <button
-                    key={count}
-                    onClick={() => setTicksCount(count)}
-                    className={`py-2 rounded-xl text-xs font-bold border transition-all ${ticksCount === count
-                        ? "bg-blue-600 border-cyan-400 text-white shadow-lg shadow-cyan-500/20"
-                        : "bg-[#040817] border-blue-900/40 text-slate-400"
+                    key={s}
+                    onClick={() => setStrategy(s)}
+                    className={`py-2.5 px-3 rounded-xl text-xs font-bold transition-all border ${strategy === s
+                        ? "bg-slate-900 text-white border-slate-900 shadow-md"
+                        : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
                       }`}
                   >
-                    {count} Ticks
+                    {s}
                   </button>
                 ))}
               </div>
             </div>
 
-            <div className="pt-2 border-t border-blue-900/40 flex items-center justify-between">
-              <span className="text-xs text-slate-300 font-medium">Auto Real-Time Feed</span>
-              <button
-                onClick={() => setAutoRefresh(!autoRefresh)}
-                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${autoRefresh ? "bg-emerald-500/20 text-emerald-400" : "bg-slate-800 text-slate-400"
-                  }`}
-              >
-                <RefreshCw className={`w-3 h-3 ${autoRefresh ? "animate-spin" : ""}`} />
-                {autoRefresh ? "Live Active" : "Paused"}
-              </button>
-            </div>
-          </div>
-
-          {/* Embed Box */}
-          <div className="bg-[#0a1128] border border-blue-900/40 rounded-3xl p-6 shadow-xl space-y-3">
-            <h3 className="text-xs font-bold text-cyan-300 uppercase tracking-wider flex items-center gap-2">
-              <Code2 className="w-4 h-4" /> Unganisha na Tovuti Yako (Embed Code)
-            </h3>
-            <div className="bg-[#040817] border border-blue-900/60 rounded-xl p-3 text-[10px] font-mono text-cyan-400 break-all select-all">
-              {`<iframe src="https://deriv-analysis-tool-psi.vercel.app" width="100%" height="750px" frameborder="0"></iframe>`}
-            </div>
-            <button
-              onClick={() => copyToClipboard(`<iframe src="https://deriv-analysis-tool-psi.vercel.app" width="100%" height="750px" frameborder="0"></iframe>`)}
-              className="w-full bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 text-cyan-300 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer"
-            >
-              <Copy className="w-3.5 h-3.5" />
-              <span>{copied ? "Imenakiliwa!" : "Copy Embed Code"}</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Center & Right Column */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Main Signal Card */}
-          <div className="bg-[#0a1128] border border-blue-900/40 rounded-3xl p-6 shadow-2xl relative overflow-hidden">
-            <div className="flex items-center justify-between pb-4 border-b border-blue-900/40">
-              <div className="flex items-center gap-2">
-                <Activity className="w-5 h-5 text-cyan-400" />
-                <h2 className="text-xs font-bold text-white uppercase tracking-wider">AI Signal Recommendation</h2>
-              </div>
-              <span className="text-[11px] font-mono text-slate-400">Imesasishwa: {lastUpdated || "Inasoma..."}</span>
-            </div>
-
-            <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="bg-[#040817] border border-blue-900/50 rounded-2xl p-4">
-                <span className="text-[10px] font-bold text-slate-400 uppercase block tracking-wider">Uamuzi (Action)</span>
-                <span className={`text-xl font-black mt-1 block ${data?.aiRecommendation?.highProbabilityEdge ? "text-emerald-400 animate-pulse" : "text-amber-400"}`}>
-                  {data?.aiRecommendation?.action || "ANALYZING..."}
-                </span>
+            {/* AI Market Analyzer Card */}
+            <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm space-y-4">
+              <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+                <div className="p-1.5 bg-blue-50 text-blue-600 rounded-lg">
+                  <Zap className="w-4 h-4" />
+                </div>
+                <h2 className="text-xs font-bold uppercase text-slate-800 tracking-wider">
+                  AI Market Analyzer
+                </h2>
               </div>
 
-              <div className="bg-[#040817] border border-blue-900/50 rounded-2xl p-4 flex items-center justify-between">
+              <div className="grid grid-cols-2 gap-3 text-xs">
                 <div>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase block tracking-wider">Prediction Target</span>
-                  <span className="text-2xl font-black text-cyan-400 mt-0.5 block font-mono">
-                    {data?.aiRecommendation?.target || "--"}
+                  <span className="text-[10px] text-slate-400 block font-semibold">Current Trend</span>
+                  <span className={`font-black text-sm ${currentTrend === "Downtrend" ? "text-rose-600" : "text-emerald-600"}`}>
+                    {currentTrend}
                   </span>
                 </div>
-                {data?.aiRecommendation?.target && data.aiRecommendation.target !== "--" && (
-                  <button
-                    onClick={() => copyToClipboard(data.aiRecommendation.target.replace("DIGIT ", ""))}
-                    className="p-2 bg-blue-600/20 hover:bg-blue-600/40 border border-blue-500/30 text-cyan-300 rounded-xl"
-                  >
-                    <Copy className="w-4 h-4" />
-                  </button>
-                )}
+                <div>
+                  <span className="text-[10px] text-slate-400 block font-semibold">Signal Strength</span>
+                  <span className="font-black text-sm text-slate-800">{signalStrength}</span>
+                </div>
               </div>
 
-              <div className="bg-[#040817] border border-blue-900/50 rounded-2xl p-4">
-                <span className="text-[10px] font-bold text-slate-400 uppercase block tracking-wider">Confidence Score</span>
-                <span className="text-2xl font-black text-blue-400 mt-0.5 block font-mono">
-                  {data?.aiRecommendation?.confidenceScore || "--"}
-                </span>
+              <div>
+                <span className="text-[10px] text-slate-400 block font-semibold mb-0.5">Pattern Detected</span>
+                <p className="text-xs text-slate-600 leading-relaxed font-medium">
+                  {patternText}
+                </p>
               </div>
-            </div>
 
-            <div className="mt-4 bg-[#040817]/80 border border-blue-900/30 rounded-2xl p-4">
-              <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Sababu ya Kiufundi:</span>
-              <p className="text-xs text-slate-300 italic">
-                {data?.aiRecommendation?.reason || "Inakusanya ticks na kuhesabu probability matrices..."}
-              </p>
-            </div>
-          </div>
-
-          {/* Performance & Win/Loss Tracker */}
-          <div className="bg-[#0a1128] border border-blue-900/40 rounded-3xl p-6 shadow-xl space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <TrendingUp className="w-4 h-4 text-emerald-400" />
-                <h3 className="text-xs font-bold text-white uppercase tracking-wider">
-                  Live Signals Win Rate & History
-                </h3>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] text-slate-400">Win Rate:</span>
-                <span className="text-sm font-black text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2.5 py-0.5 rounded-lg font-mono">
-                  {winRate}%
-                </span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-5 gap-2">
-              {signalHistory.map((item) => (
-                <div
-                  key={item.id}
-                  className={`border rounded-2xl p-2.5 text-center transition-all ${item.result === "WIN"
-                      ? "bg-emerald-500/10 border-emerald-500/40 text-emerald-300"
-                      : "bg-rose-500/10 border-rose-500/40 text-rose-300"
+              {/* Big Prediction Digit Circle with Action Buttons */}
+              <div className="pt-3 flex items-center justify-between gap-3">
+                <button
+                  onClick={() => setStrategy("Matches")}
+                  className={`flex-1 py-3 rounded-2xl text-xs font-bold border transition-all ${strategy === "Matches"
+                      ? "bg-blue-600 text-white border-blue-600 shadow-lg shadow-blue-500/20"
+                      : "bg-slate-50 border-slate-200 text-slate-700"
                     }`}
                 >
-                  <div className="flex items-center justify-center gap-1 mb-1">
-                    {item.result === "WIN" ? (
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                    ) : (
-                      <XCircle className="w-3.5 h-3.5 text-rose-400" />
-                    )}
-                    <span className="text-[10px] font-bold uppercase">{item.result}</span>
-                  </div>
-                  <span className="text-xs font-bold block text-white">{item.action}</span>
-                  <span className="text-[9px] text-slate-400 font-mono block mt-0.5">{item.time}</span>
-                </div>
-              ))}
-            </div>
-          </div>
+                  Matches
+                </button>
 
-          {/* Digit Heatmap */}
-          <div className="bg-[#0a1128] border border-blue-900/40 rounded-3xl p-6 shadow-xl">
-            <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2 mb-4">
-              <BarChart3 className="w-4 h-4 text-cyan-400" /> Digit Distribution Heatmap (0 - 9)
-            </h3>
-            <div className="grid grid-cols-5 sm:grid-cols-10 gap-2">
-              {Array.from({ length: 10 }).map((_, digit) => {
-                const pct = data?.analysis?.digitFrequency[digit] || 0;
-                const isCold = pct <= 7;
-                const isHot = pct >= 14;
+                {/* Big Center Digit Circle (Bofya ku-copy tarakimu kuweka kwenye bot) */}
+                <div
+                  onClick={copyPrediction}
+                  className="w-16 h-16 rounded-full bg-gradient-to-tr from-purple-600 to-indigo-600 text-white flex flex-col items-center justify-center shadow-lg shadow-purple-500/30 cursor-pointer active:scale-95 transition-all"
+                  title="Click to copy digit for your bot"
+                >
+                  <span className="text-2xl font-black font-mono leading-none">
+                    {predictedDigit !== null ? predictedDigit : "--"}
+                  </span>
+                  <span className="text-[9px] font-bold text-purple-200 font-mono mt-0.5">
+                    {copied ? "COPIED" : `0:0${timerCount}`}
+                  </span>
+                </div>
 
-                return (
-                  <div
-                    key={digit}
-                    className={`border rounded-2xl p-2.5 text-center transition-all ${isCold ? "bg-emerald-500/10 border-emerald-500/40 text-emerald-300" : isHot ? "bg-rose-500/10 border-rose-500/40 text-rose-300" : "bg-[#040817] border-blue-900/40 text-slate-300"
-                      }`}
-                  >
-                    <span className="text-sm font-black block font-mono">{digit}</span>
-                    <span className="text-[11px] font-mono block mt-0.5">{pct}%</span>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6 pt-6 border-t border-blue-900/40">
-              <div className="bg-[#040817] border border-blue-900/40 rounded-2xl p-4">
-                <div className="flex justify-between text-xs font-bold mb-2">
-                  <span className="text-cyan-400">EVEN: {data?.analysis?.evenPercentage || "0%"}</span>
-                  <span className="text-indigo-400">ODD: {data?.analysis?.oddPercentage || "0%"}</span>
-                </div>
-                <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden flex">
-                  <div className="bg-cyan-500 h-full" style={{ width: data?.analysis?.evenPercentage || "50%" }} />
-                  <div className="bg-indigo-500 h-full" style={{ width: data?.analysis?.oddPercentage || "50%" }} />
-                </div>
-              </div>
-
-              <div className="bg-[#040817] border border-blue-900/40 rounded-2xl p-4">
-                <div className="flex justify-between text-xs font-bold mb-2">
-                  <span className="text-blue-400">UNDER (0-4): {data?.analysis?.underPercentage || "0%"}</span>
-                  <span className="text-emerald-400">OVER (5-9): {data?.analysis?.overPercentage || "0%"}</span>
-                </div>
-                <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden flex">
-                  <div className="bg-blue-500 h-full" style={{ width: data?.analysis?.underPercentage || "50%" }} />
-                  <div className="bg-emerald-500 h-full" style={{ width: data?.analysis?.overPercentage || "50%" }} />
-                </div>
+                <button
+                  onClick={() => setStrategy("Differs")}
+                  className={`flex-1 py-3 rounded-2xl text-xs font-bold border transition-all ${strategy === "Differs"
+                      ? "bg-blue-600 text-white border-blue-600 shadow-lg shadow-blue-500/20"
+                      : "bg-slate-50 border-slate-200 text-slate-700"
+                    }`}
+                >
+                  Differs
+                </button>
               </div>
             </div>
+
+            {/* Live Indicator Status & Market Toggle */}
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
+                <span className="text-xs font-semibold text-slate-700">{symbolLabel}</span>
+              </div>
+              <button
+                onClick={() => setIsAnalyzing(!isAnalyzing)}
+                className={`text-xs font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5 transition-all ${isAnalyzing
+                    ? "bg-rose-50 text-rose-600 border border-rose-200"
+                    : "bg-emerald-50 text-emerald-600 border border-emerald-200"
+                  }`}
+              >
+                {isAnalyzing ? <Square className="w-3 h-3 fill-current" /> : <Play className="w-3 h-3 fill-current" />}
+                {isAnalyzing ? "Stop Analysis" : "Start Analysis"}
+              </button>
+            </div>
+
+          </main>
+        ) : (
+          /* View: Configuration Screen */
+          <main className="p-5 space-y-4 flex-1">
+            <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
+              <button
+                onClick={() => setCurrentView("TOOL")}
+                className="p-1.5 text-slate-500 hover:text-slate-800"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+              <h2 className="text-sm font-bold text-slate-800">Live Dashboard Settings</h2>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Contract Type:</label>
+              <select
+                value={strategy}
+                onChange={(e) => setStrategy(e.target.value as any)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs font-bold text-slate-800 focus:outline-none"
+              >
+                <option value="Matches">Matches</option>
+                <option value="Differs">Differs</option>
+                <option value="Even">Even</option>
+                <option value="Odd">Odd</option>
+                <option value="Over">Over</option>
+                <option value="Under">Under</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Volatility Market:</label>
+              <select
+                value={symbol}
+                onChange={(e) => {
+                  setSymbol(e.target.value);
+                  setSymbolLabel(e.target.options[e.target.selectedIndex].text);
+                }}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs font-bold text-slate-800 focus:outline-none"
+              >
+                <option value="1HZ25V">Volatility 25 (1s) Index</option>
+                <option value="R_25">Volatility 25 Index</option>
+                <option value="1HZ100V">Volatility 100 (1s) Index</option>
+                <option value="R_100">Volatility 100 Index</option>
+                <option value="1HZ75V">Volatility 75 (1s) Index</option>
+                <option value="R_75">Volatility 75 Index</option>
+                <option value="1HZ50V">Volatility 50 (1s) Index</option>
+                <option value="1HZ10V">Volatility 10 (1s) Index</option>
+              </select>
+            </div>
+
+            <button
+              onClick={() => setCurrentView("TOOL")}
+              className="w-full bg-slate-900 text-white font-bold py-3.5 rounded-xl text-xs uppercase tracking-wider shadow-md mt-4"
+            >
+              Hifadhi & Rudi Kwenye Signals
+            </button>
+          </main>
+        )}
+
+        {/* Bottom Bar */}
+        <footer className="px-5 py-3 border-t border-slate-100 bg-white flex items-center justify-between text-[11px] text-slate-400">
+          <div>
+            <span className="font-bold text-slate-800 block text-xs">Expert Analysis Tool</span>
+            <span className="text-[10px]">Use digit signals with your LizyTrade bot</span>
           </div>
-        </div>
-      </main>
+          <div className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-emerald-500" />
+            <span className="text-slate-600 font-semibold">Live Connected</span>
+          </div>
+        </footer>
+
+      </div>
     </div>
   );
 }

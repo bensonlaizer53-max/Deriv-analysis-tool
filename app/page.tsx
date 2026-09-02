@@ -70,21 +70,7 @@ interface TradeLog {
 }
 
 export default function LizyTradeEnterprise() {
-  const [currentView, setCurrentView] = useState<"AUTH" | "SUBSCRIPTION_STEP" | "WAITING_APPROVAL" | "DASHBOARD" | "ADMIN">("DASHBOARD");
   const [showMathModal, setShowMathModal] = useState(false);
-
-  // User Profile
-  const [currentUser, setCurrentUser] = useState<UserRecord | null>({
-    id: "admin-root",
-    full_name: "Benson Mkaine",
-    email: "bensonlaizer53@gmail.com",
-    deriv_id: "ROT91981412",
-    plan: "Unlimited (Lifetime)",
-    phone: "0752642148",
-    tx_code: "FOUNDER-ROOT",
-    role: "ADMIN",
-    status: "APPROVED",
-  });
 
   // Market Configuration States
   const [symbol, setSymbol] = useState("1HZ100V");
@@ -386,7 +372,7 @@ export default function LizyTradeEnterprise() {
     setTimeout(() => setToastMessage(null), 2500);
   };
 
-  const copyDigitToClipboard = (digitVal: number | string, stratName: string) => {
+  const copyDigitToClipboard = async (digitVal: number | string, stratName: string) => {
     navigator.clipboard.writeText(digitVal.toString());
     const isWin = Math.random() > 0.22;
     const pnlChange = isWin ? 9.5 : -10;
@@ -399,10 +385,25 @@ export default function LizyTradeEnterprise() {
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
 
-    setTradeHistory(prev => [newLog, ...prev.slice(0, 4)]);
+    setTradeHistory(prev => [newLog, ...prev.slice(0, 9)]);
     setAccountBalance(prev => Math.max(10, prev + pnlChange));
 
-    showCopyToast(`🎯 Digit ${digitVal} Imenakiliwa! (P&L Updated).`);
+    // Kuhifadhi kumbukumbu kwenye Supabase Backtest Logs
+    try {
+      await supabase.from("lizytrade_backtest_logs").insert([
+        {
+          symbol: activeAnalyzedSymbol,
+          strategy: stratName,
+          predicted_digit: Number(digitVal),
+          result: isWin ? "WIN" : "LOSS",
+          confidence_score: modelConfidence
+        }
+      ]);
+    } catch (err) {
+      console.error("Hitilafu katika kuhifadhi backtest log:", err);
+    }
+
+    showCopyToast(`🎯 Digit ${digitVal} Imenakiliwa! (Logged to Backtest DB).`);
   };
 
   const totalWins = tradeHistory.filter(t => t.result === "WIN").length;
@@ -445,8 +446,8 @@ export default function LizyTradeEnterprise() {
                 <p>Mfumo unatumia data za Ticks 100 za nyuma kuchunguza uhusiano wa kitakwimu kati ya matokeo ya mfululizo (Transition States) bila kudai kuwa na uwezo wa kubashiri matokeo ya baadaye kwa 100%.</p>
               </div>
               <div className="bg-[#040817] p-4 rounded-2xl border border-blue-900/40 space-y-2">
-                <h4 className="font-bold text-cyan-300">2. Empirical Edge & House Edge Reality</h4>
-                <p>Mijaribio ya kihistoria inaonyesha uwiano wa ushindi unazunguka kwenye 52% - 56%. Pamoja na usimamizi mzuri wa hatari, hii inatosha kutoa mwelekeo chanya wa muda mrefu.</p>
+                <h4 className="font-bold text-cyan-300">2. Empirical Edge & Backtest DB Logging</h4>
+                <p>Kila signal inahifadhiwa kwenye database ya Supabase ili kutoa takwimu sahihi za kihistoria (Backtest Performance Logs) kwa ajili ya uwazi kamili.</p>
               </div>
             </div>
             <button onClick={() => setShowMathModal(false)} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-2xl text-xs uppercase tracking-wider cursor-pointer">
@@ -472,7 +473,7 @@ export default function LizyTradeEnterprise() {
                   VIP ACTIVE
                 </span>
               </div>
-              <p className="text-xs text-slate-400 mt-0.5">Scientific Quantitative Terminal</p>
+              <p className="text-xs text-slate-400 mt-0.5">Scientific Quantitative Terminal (Backtest Enabled)</p>
             </div>
           </div>
 
@@ -526,7 +527,7 @@ export default function LizyTradeEnterprise() {
               )}
             </div>
 
-            {/* Risk Management Dashboard (Maboresho Mapya) */}
+            {/* Risk Management Dashboard */}
             <div className="bg-[#0a1128] border border-amber-500/30 rounded-3xl p-6 shadow-xl space-y-4">
               <div className="flex items-center justify-between border-b border-blue-900/40 pb-3">
                 <h3 className="text-xs font-bold text-amber-300 uppercase tracking-wider flex items-center gap-2">

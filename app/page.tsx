@@ -121,7 +121,7 @@ export default function LizyTradeEnterprise() {
     currentUser?.email?.toLowerCase() === "bensonlaizer53@gmail.com" ||
     currentUser?.deriv_id?.toUpperCase() === "ROT91981412";
 
-  // URL rasmi ya Deriv Bot kwa kila mtu (Ikiwemo wewe na wateja)
+  // URL rasmi ya Deriv Bot kwa kila mtu
   const externalBotUrl = "https://bot.deriv.com";
 
   // Sauti ya tahadhari (Beep)
@@ -434,15 +434,15 @@ export default function LizyTradeEnterprise() {
         {/* Action Controls */}
         <div className="flex items-center flex-wrap gap-2.5">
 
-          {/* Kitufe cha Launch Deriv Bot kinachoelekea bot.deriv.com moja kwa moja */}
+          {/* Kitufe kikuu sasa kimeandikwa Launch bot.deriv.com */}
           <a
             href={externalBotUrl}
             target="_blank"
             rel="noreferrer"
             className="text-xs bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white px-4 py-2.5 rounded-xl font-bold flex items-center gap-2 transition-all shadow-lg shadow-cyan-500/20 cursor-pointer"
-            title="Fungua Deriv Bot kwenye tab mpya"
+            title="Fungua bot.deriv.com kwenye tab mpya"
           >
-            <span>Launch Deriv Bot ↗</span>
+            <span>Launch bot.deriv.com ↗</span>
             <ExternalLink className="w-3.5 h-3.5" />
           </a>
 

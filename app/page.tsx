@@ -210,7 +210,7 @@ export default function LizyTradeQuantitativeTerminal() {
 
       setPredictedDigit(target);
       setObservedFrequency(obsPct);
-      setStatisticalEdge(Number((obsPct - 10.0).toFixed(1))); // Baseline ni 10%
+      setStatisticalEdge(Number((obsPct - 10.0).toFixed(1)));
       setModelConfidence(obsPct > 13 ? "High" : obsPct > 11 ? "Medium" : "Low");
       setPatternText(explanation);
       setCurrentTrend(Math.random() > 0.46 ? "Downtrend" : "Uptrend");
@@ -423,7 +423,7 @@ export default function LizyTradeQuantitativeTerminal() {
       )}
 
       <div>
-        {/* Header (Bila kuweka Account ID ya faragha) */}
+        {/* Header */}
         <header className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between pb-5 border-b border-blue-900/40 gap-4">
           <div className="flex items-center gap-3">
             <div className="p-3 bg-gradient-to-br from-blue-600/30 to-cyan-500/20 border border-cyan-500/40 rounded-2xl text-cyan-400 shadow-lg">
@@ -562,7 +562,7 @@ export default function LizyTradeQuantitativeTerminal() {
                 </h2>
               </div>
 
-              {/* Statistical Metrics Panel (Kama ilivyoelekezwa na mhakiki) */}
+              {/* Statistical Metrics Panel */}
               <div className="bg-[#040817] border border-blue-900/60 rounded-2xl p-4 grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs font-mono">
                 <div>
                   <span className="text-[9px] text-slate-400 uppercase block font-sans">Observed Freq:</span>
@@ -597,14 +597,20 @@ export default function LizyTradeQuantitativeTerminal() {
                 ))}
               </div>
 
-              {/* Center Digit */}
+              {/* Center Circular Badge (Duara la Tarakimu limerejeshwa hapa!) */}
               <div className="pt-2 flex items-center justify-center">
                 <div
                   onClick={() => copyDigitToClipboard(predictedDigit, selectedStrategy)}
-                  className="w-24 h-24 rounded-full bg-gradient-to-tr from-blue-600 via-indigo-600 to-cyan-500 text-white flex flex-col items-center justify-center shadow-2xl cursor-pointer hover:ring-4 hover:ring-cyan-500/30 relative"
+                  className="w-24 h-24 rounded-full bg-gradient-to-tr from-blue-600 via-indigo-600 to-cyan-500 text-white flex flex-col items-center justify-center shadow-2xl shadow-cyan-600/40 cursor-pointer active:scale-95 transition-all select-none hover:ring-4 hover:ring-cyan-500/30 relative"
                   title="Bofya ku-copy tarakimu"
                 >
-                  <span className="text-4xl font-black font-mono leading-none">{predictedDigit}</span>
+                  <span className="absolute -top-1 -right-1 bg-emerald-500 text-slate-950 p-1 rounded-full text-[9px] font-black shadow">
+                    <LockKeyhole className="w-3 h-3" />
+                  </span>
+
+                  <span className="text-4xl font-black font-mono leading-none">
+                    {predictedDigit}
+                  </span>
                   <span className="text-[10px] font-black text-cyan-200 font-mono mt-1">
                     {phaseState === "ACTIVE_SUGGESTION" ? `0:0${timerCount}` : `${cooldownCountdown}s`}
                   </span>

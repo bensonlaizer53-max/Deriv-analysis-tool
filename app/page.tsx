@@ -89,7 +89,7 @@ export default function LizyTradeEnterprise() {
   const [data, setData] = useState<any>(null);
   const [lastUpdated, setLastUpdated] = useState<string>("");
 
-  // Live Last 10 Ticks / Digits Stream
+  // Live Last 10 Ticks Stream
   const [recentDigits, setRecentDigits] = useState<number[]>([8, 4, 1, 9, 3, 7, 0, 4, 6, 2]);
 
   // Strategy & Prediction States
@@ -99,7 +99,7 @@ export default function LizyTradeEnterprise() {
   const [confidenceScore, setConfidenceScore] = useState(94.8);
   const [predictedDigit, setPredictedDigit] = useState<number>(4);
   const [timerCount, setTimerCount] = useState(10);
-  const [patternText, setPatternText] = useState("Digit 4 is leading with high mathematical divergence on current index.");
+  const [patternText, setPatternText] = useState("Digit 4 is showing peak statistical divergence on current index.");
 
   // Floating Toast Copy Notification
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -296,7 +296,6 @@ export default function LizyTradeEnterprise() {
         setData(result);
         setLastUpdated(new Date().toLocaleTimeString());
 
-        // Update live stream with a new random last tick
         const nextTick = Math.floor(Math.random() * 10);
         setRecentDigits((prev) => [nextTick, ...prev.slice(0, 9)]);
 
@@ -962,21 +961,49 @@ export default function LizyTradeEnterprise() {
               </select>
             </div>
 
+            {/* Upgraded Ticks Window with Professional Strategy Labels */}
             <div>
-              <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1.5">Ticks Window:</label>
+              <div className="flex justify-between items-center mb-1.5">
+                <label className="block text-[11px] font-bold text-slate-300 uppercase">
+                  Kina cha Uchambuzi (Ticks Window):
+                </label>
+                <span className="text-[10px] font-mono text-cyan-400">
+                  {ticksCount === 50 ? "Fast Scalp" : ticksCount === 100 ? "Standard" : "High Safety"}
+                </span>
+              </div>
               <div className="grid grid-cols-3 gap-2">
-                {[50, 100, 200].map((count) => (
-                  <button
-                    key={count}
-                    onClick={() => setTicksCount(count)}
-                    className={`py-2 rounded-xl text-xs font-bold border transition-all ${ticksCount === count
-                        ? "bg-blue-600 border-cyan-400 text-white shadow-lg shadow-cyan-500/20"
-                        : "bg-[#040817] border-blue-900/40 text-slate-400"
-                      }`}
-                  >
-                    {count} Ticks
-                  </button>
-                ))}
+                <button
+                  onClick={() => setTicksCount(50)}
+                  className={`py-2 px-1 rounded-xl text-center border transition-all ${ticksCount === 50
+                      ? "bg-blue-600 border-cyan-400 text-white shadow-lg shadow-cyan-500/20"
+                      : "bg-[#040817] border-blue-900/40 text-slate-400 hover:text-white"
+                    }`}
+                >
+                  <span className="text-xs font-bold block">50 Ticks</span>
+                  <span className="text-[9px] block text-cyan-200 mt-0.5 font-medium">Fast Scalp</span>
+                </button>
+
+                <button
+                  onClick={() => setTicksCount(100)}
+                  className={`py-2 px-1 rounded-xl text-center border transition-all ${ticksCount === 100
+                      ? "bg-blue-600 border-cyan-400 text-white shadow-lg shadow-cyan-500/20"
+                      : "bg-[#040817] border-blue-900/40 text-slate-400 hover:text-white"
+                    }`}
+                >
+                  <span className="text-xs font-bold block">100 Ticks</span>
+                  <span className="text-[9px] block text-cyan-200 mt-0.5 font-medium">Balanced</span>
+                </button>
+
+                <button
+                  onClick={() => setTicksCount(200)}
+                  className={`py-2 px-1 rounded-xl text-center border transition-all ${ticksCount === 200
+                      ? "bg-blue-600 border-cyan-400 text-white shadow-lg shadow-cyan-500/20"
+                      : "bg-[#040817] border-blue-900/40 text-slate-400 hover:text-white"
+                    }`}
+                >
+                  <span className="text-xs font-bold block">200 Ticks</span>
+                  <span className="text-[9px] block text-cyan-200 mt-0.5 font-medium">High Safety</span>
+                </button>
               </div>
             </div>
 

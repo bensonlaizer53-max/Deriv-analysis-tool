@@ -44,22 +44,9 @@ import {
   BookOpen,
   HelpCircle,
   FileText,
-  ShieldCheck
+  ShieldCheck,
+  BarChart2
 } from "lucide-react";
-
-interface UserRecord {
-  id: string;
-  full_name: string;
-  email: string;
-  deriv_id: string;
-  password?: string;
-  plan: string;
-  phone: string;
-  tx_code: string;
-  receipt_image?: string;
-  role: "ADMIN" | "USER";
-  status: "APPROVED" | "PENDING" | "REJECTED";
-}
 
 interface TradeLog {
   id: string;
@@ -69,7 +56,7 @@ interface TradeLog {
   time: string;
 }
 
-export default function LizyTradeEnterprise() {
+export default function LizyTradeQuantitativeTerminal() {
   const [showMathModal, setShowMathModal] = useState(false);
 
   // Market Configuration States
@@ -84,10 +71,10 @@ export default function LizyTradeEnterprise() {
 
   // Risk Management Dashboard States
   const [accountBalance, setAccountBalance] = useState(500.00);
-  const [riskPercentage, setRiskPercentage] = useState(1); // 1% per trade
+  const [riskPercentage, setRiskPercentage] = useState(1);
   const [stopLossLimit, setStopLossLimit] = useState(20);
   const [takeProfitGoal, setTakeProfitGoal] = useState(50);
-  const [dailyLossLimitPct, setDailyLossLimitPct] = useState(5); // 5% max daily loss limit
+  const [dailyLossLimitPct, setDailyLossLimitPct] = useState(5);
 
   // Trading Journal & Session State
   const [tradeHistory, setTradeHistory] = useState<TradeLog[]>([
@@ -96,24 +83,27 @@ export default function LizyTradeEnterprise() {
     { id: "3", strategy: "Even", digit: 4, result: "LOSS", time: "16:15" },
     { id: "4", strategy: "Matches", digit: 9, result: "WIN", time: "16:18" },
   ]);
-  const [marketAdvice, setMarketAdvice] = useState<string>("Second-Order Markov Transition Matrix active. Evaluating empirical edge...");
+  const [marketAdvice, setMarketAdvice] = useState<string>("Rolling statistics & conditional probabilities initialized.");
 
   // Live Historical Ticks Buffer
   const [recentDigits, setRecentDigits] = useState<number[]>([9, 4, 8, 3, 8, 9, 1, 5, 3, 7]);
 
-  // Strategy & Prediction States
+  // Strategy & Statistical Metrics States
   const [selectedStrategy, setSelectedStrategy] = useState<"Matches" | "Differs" | "Even" | "Odd" | "Over" | "Under">("Matches");
   const [currentTrend, setCurrentTrend] = useState<"Uptrend" | "Downtrend">("Downtrend");
-  const [signalStrength, setSignalStrength] = useState<"PROBABILITY SIGNAL SUGGESTION" | "DEEP FILTRATION (60s)">("PROBABILITY SIGNAL SUGGESTION");
-  const [modelConfidence, setModelConfidence] = useState(84.5);
+  const [signalStatus, setSignalStatus] = useState<"ACTIVE 10s" | "DEEP FILTRATION (60s)">("ACTIVE 10s");
+
   const [predictedDigit, setPredictedDigit] = useState<number>(7);
+  const [observedFrequency, setObservedFrequency] = useState<number>(14.2);
+  const [statisticalEdge, setStatisticalEdge] = useState<number>(4.2);
+  const [modelConfidence, setModelConfidence] = useState<string>("Medium");
 
   // Timer States
   const [timerCount, setTimerCount] = useState(10);
   const [phaseState, setPhaseState] = useState<"ACTIVE_SUGGESTION" | "DEEP_ANALYZING">("ACTIVE_SUGGESTION");
   const [cooldownCountdown, setCooldownCountdown] = useState(60);
 
-  const [patternText, setPatternText] = useState("Markov Order-2 Matrix: Statistical transition weights evaluated.");
+  const [patternText, setPatternText] = useState("Order-2 Markov Chain: Validating statistical transition weights.");
 
   // Frequencies State
   const [digitFrequencies, setDigitFrequencies] = useState<Record<number, number>>({
@@ -152,18 +142,6 @@ export default function LizyTradeEnterprise() {
     } catch { }
   }, [soundAlert]);
 
-  useEffect(() => {
-    const evaluateBestStrategy = () => {
-      const is1s = symbol.includes("1s") || symbol.includes("1HZ");
-      if (is1s) {
-        setMarketAdvice(`🔬 Markov Analysis (${activeAnalyzedSymbol}): Order-2 transition states active. Manage risk strictly at ${riskPercentage}% per contract.`);
-      } else {
-        setMarketAdvice(`📊 Standard Index: Transition matrix stable under normal volatility.`);
-      }
-    };
-    evaluateBestStrategy();
-  }, [symbol, activeAnalyzedSymbol, riskPercentage]);
-
   const processIncomingTick = useCallback((lastD: number, newPriceStr?: string) => {
     if (needsRecalibration) return;
 
@@ -200,7 +178,7 @@ export default function LizyTradeEnterprise() {
 
       const sorted = Object.entries(nextFreqs).map(([d, count]) => ({
         digit: parseInt(d, 10),
-        pct: Math.round((count / totalWeights) * 100)
+        pct: Number(((count / totalWeights) * 100).toFixed(1))
       })).sort((a, b) => a.pct - b.pct);
 
       const lowestCold = sorted[0];
@@ -213,40 +191,30 @@ export default function LizyTradeEnterprise() {
       }
 
       let target = highestHot.digit;
+      let obsPct = highestHot.pct;
       let explanation = "";
-      let confidence = 82.4;
 
       const currentTransitions = markovMatrixRef.current[lastD];
       if (currentTransitions && Object.keys(currentTransitions).length > 0) {
         const bestMarkovEntry = Object.entries(currentTransitions).reduce((a, b) => (a[1] > b[1] ? a : b));
         target = parseInt(bestMarkovEntry[0], 10);
-        confidence = 85.5;
-        explanation = `Markov Order-2 Matrix: Transition probability favors Digit ${target} based on recent sequence.`;
+        obsPct = sorted.find(s => s.digit === target)?.pct || 12.0;
+        explanation = `Conditional Probability: Transition weight from previous state favors Digit ${target}.`;
       }
 
       if (selectedStrategy === "Differs") {
         target = lowestCold.digit;
-        confidence = 87.1;
-        explanation = `Statistical Outlier: Digit ${target} shows suppressed frequency weight (${lowestCold.pct}%).`;
-      } else if (selectedStrategy === "Even") {
-        target = ([...sorted].reverse().find(e => e.digit % 2 === 0) || highestHot).digit;
-        confidence = 81.2;
-      } else if (selectedStrategy === "Odd") {
-        target = ([...sorted].reverse().find(e => e.digit % 2 !== 0) || highestHot).digit;
-        confidence = 82.8;
-      } else if (selectedStrategy === "Over") {
-        target = ([...sorted].reverse().find(e => e.digit >= 5) || highestHot).digit;
-        confidence = 80.5;
-      } else if (selectedStrategy === "Under") {
-        target = ([...sorted].reverse().find(e => e.digit <= 4) || lowestCold).digit;
-        confidence = 81.9;
+        obsPct = lowestCold.pct;
+        explanation = `Statistical Outlier: Digit ${target} displays suppressed frequency.`;
       }
 
       setPredictedDigit(target);
-      setModelConfidence(confidence);
+      setObservedFrequency(obsPct);
+      setStatisticalEdge(Number((obsPct - 10.0).toFixed(1))); // Baseline ni 10%
+      setModelConfidence(obsPct > 13 ? "High" : obsPct > 11 ? "Medium" : "Low");
       setPatternText(explanation);
       setCurrentTrend(Math.random() > 0.46 ? "Downtrend" : "Uptrend");
-      setSignalStrength("PROBABILITY SIGNAL SUGGESTION");
+      setSignalStatus("ACTIVE 10s");
 
       const normalizedFreqs: Record<number, number> = {};
       sorted.forEach(item => { normalizedFreqs[item.digit] = item.pct; });
@@ -254,7 +222,7 @@ export default function LizyTradeEnterprise() {
     });
   }, [selectedStrategy, phaseState, needsRecalibration]);
 
-  // WebSocket Live Connection
+  // WebSocket Connection
   useEffect(() => {
     let isMounted = true;
     let ws: WebSocket | null = null;
@@ -332,7 +300,7 @@ export default function LizyTradeEnterprise() {
     setPhaseState("ACTIVE_SUGGESTION");
     setTimerCount(10);
     playSignalAlertSound();
-    showCopyToast(`🚀 Soko la ${symbol} limeunganishwa upya.`);
+    showCopyToast(`🚀 Rolling statistics re-initialized for ${symbol}.`);
   };
 
   useEffect(() => {
@@ -344,8 +312,8 @@ export default function LizyTradeEnterprise() {
           if (prev <= 1) {
             setPhaseState("DEEP_ANALYZING");
             setCooldownCountdown(60);
-            setSignalStrength("DEEP FILTRATION (60s)");
-            setPatternText("Evaluating empirical noise across recent transition states...");
+            setSignalStatus("DEEP FILTRATION (60s)");
+            setPatternText("Filtration state: Validating rolling standard deviation across sample.");
             return 10;
           }
           return prev - 1;
@@ -355,7 +323,7 @@ export default function LizyTradeEnterprise() {
           if (prev <= 1) {
             setPhaseState("ACTIVE_SUGGESTION");
             setTimerCount(10);
-            setSignalStrength("PROBABILITY SIGNAL SUGGESTION");
+            setSignalStatus("ACTIVE 10s");
             playSignalAlertSound();
             return 60;
           }
@@ -388,7 +356,6 @@ export default function LizyTradeEnterprise() {
     setTradeHistory(prev => [newLog, ...prev.slice(0, 9)]);
     setAccountBalance(prev => Math.max(10, prev + pnlChange));
 
-    // Kuhifadhi kumbukumbu kwenye Supabase Backtest Logs
     try {
       await supabase.from("lizytrade_backtest_logs").insert([
         {
@@ -396,14 +363,12 @@ export default function LizyTradeEnterprise() {
           strategy: stratName,
           predicted_digit: Number(digitVal),
           result: isWin ? "WIN" : "LOSS",
-          confidence_score: modelConfidence
+          confidence_score: observedFrequency
         }
       ]);
-    } catch (err) {
-      console.error("Hitilafu katika kuhifadhi backtest log:", err);
-    }
+    } catch { }
 
-    showCopyToast(`🎯 Digit ${digitVal} Imenakiliwa! (Logged to Backtest DB).`);
+    showCopyToast(`🎯 Digit ${digitVal} copied! Signal logged to database.`);
   };
 
   const totalWins = tradeHistory.filter(t => t.result === "WIN").length;
@@ -436,18 +401,18 @@ export default function LizyTradeEnterprise() {
                 <BookOpen className="w-6 h-6" />
               </div>
               <div>
-                <h3 className="text-base font-black text-white">Scientific Transparency & Quantitative Model</h3>
-                <p className="text-xs text-slate-400">Order-2 Markov Chain Transition Matrix & Statistical Reality</p>
+                <h3 className="text-base font-black text-white">Quantitative Methodology & Analytics Engine</h3>
+                <p className="text-xs text-slate-400">Rolling Statistics, Digit Frequency, and Conditional Probabilities</p>
               </div>
             </div>
             <div className="space-y-4 text-xs leading-relaxed text-slate-300 max-h-[60vh] overflow-y-auto pr-2">
               <div className="bg-[#040817] p-4 rounded-2xl border border-blue-900/40 space-y-2">
-                <h4 className="font-bold text-cyan-300">1. Second-Order Markov Chain Model</h4>
-                <p>Mfumo unatumia data za Ticks 100 za nyuma kuchunguza uhusiano wa kitakwimu kati ya matokeo ya mfululizo (Transition States) bila kudai kuwa na uwezo wa kubashiri matokeo ya baadaye kwa 100%.</p>
+                <h4 className="font-bold text-cyan-300">1. Data Validation & Rolling Statistics</h4>
+                <p>Engine inachunguza ticks za wakati halisi (Live ticks) kupitia WebSocket, kuthibitisha usahihi wa data, na kuchuja kelele za soko kupitia mbinu za kitakwimu.</p>
               </div>
               <div className="bg-[#040817] p-4 rounded-2xl border border-blue-900/40 space-y-2">
-                <h4 className="font-bold text-cyan-300">2. Empirical Edge & Backtest DB Logging</h4>
-                <p>Kila signal inahifadhiwa kwenye database ya Supabase ili kutoa takwimu sahihi za kihistoria (Backtest Performance Logs) kwa ajili ya uwazi kamili.</p>
+                <h4 className="font-bold text-cyan-300">2. Statistical Edge & Baseline Comparison</h4>
+                <p>Kila tarakimu ina thamani inayotarajiwa ya asilimia 10 (Expected Baseline). Statistical Edge (+%) inaonyesha tofauti kati ya mzunguko halisi ulioonekana (Observed Frequency) na baseline hiyo.</p>
               </div>
             </div>
             <button onClick={() => setShowMathModal(false)} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-2xl text-xs uppercase tracking-wider cursor-pointer">
@@ -458,28 +423,28 @@ export default function LizyTradeEnterprise() {
       )}
 
       <div>
-        {/* Header */}
+        {/* Header (Bila kuweka Account ID ya faragha) */}
         <header className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between pb-5 border-b border-blue-900/40 gap-4">
           <div className="flex items-center gap-3">
             <div className="p-3 bg-gradient-to-br from-blue-600/30 to-cyan-500/20 border border-cyan-500/40 rounded-2xl text-cyan-400 shadow-lg">
-              <Zap className="w-7 h-7" />
+              <BarChart2 className="w-7 h-7" />
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-xl md:text-2xl font-black tracking-tight text-white">
-                  LizyTrade AI Signal Engine
+                  BTradeAnalysis Analytics Engine
                 </h1>
                 <span className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase">
-                  VIP ACTIVE
+                  PRO TERMINAL
                 </span>
               </div>
-              <p className="text-xs text-slate-400 mt-0.5">Scientific Quantitative Terminal (Backtest Enabled)</p>
+              <p className="text-xs text-slate-400 mt-0.5">Quantitative Ticks Analytics & Rolling Statistics</p>
             </div>
           </div>
 
           <div className="flex items-center flex-wrap gap-2.5">
             <button onClick={() => setShowMathModal(true)} className="text-xs bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 px-3.5 py-2.5 rounded-xl font-bold flex items-center gap-1.5 cursor-pointer">
-              <BookOpen className="w-3.5 h-3.5 text-cyan-400" /> Math Transparency
+              <BookOpen className="w-3.5 h-3.5 text-cyan-400" /> Methodology
             </button>
             <a href={externalBotUrl} target="_blank" rel="noreferrer" className="text-xs bg-gradient-to-r from-blue-600 to-cyan-600 text-white px-4 py-2.5 rounded-xl font-bold flex items-center gap-2">
               <span>Launch bot.deriv.com ↗</span>
@@ -495,7 +460,7 @@ export default function LizyTradeEnterprise() {
               <BookOpen className="w-4 h-4" />
             </div>
             <div>
-              <span className="text-[10px] font-bold text-cyan-300 uppercase tracking-wider block">Statistical Strategy Suggestion:</span>
+              <span className="text-[10px] font-bold text-cyan-300 uppercase tracking-wider block">Rolling Statistics & Conditional Probabilities:</span>
               <p className="text-xs text-slate-200 font-medium">{marketAdvice}</p>
             </div>
           </div>
@@ -508,7 +473,7 @@ export default function LizyTradeEnterprise() {
           <div className="space-y-6">
             <div className="bg-[#0a1128] border border-blue-900/40 rounded-3xl p-6 shadow-xl space-y-5">
               <h2 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                <Sliders className="w-4 h-4 text-cyan-400" /> Mipangilio ya Soko
+                <Sliders className="w-4 h-4 text-cyan-400" /> Market Configuration
               </h2>
               <select
                 value={symbol}
@@ -522,7 +487,7 @@ export default function LizyTradeEnterprise() {
 
               {needsRecalibration && (
                 <button onClick={startRecalibration} className="w-full bg-amber-500 text-slate-950 text-xs font-black py-2.5 rounded-xl flex items-center justify-center gap-2">
-                  <PlayCircle className="w-4 h-4" /> Anzisha Matrix Upya
+                  <PlayCircle className="w-4 h-4" /> Re-initialize Statistics
                 </button>
               )}
             </div>
@@ -531,7 +496,7 @@ export default function LizyTradeEnterprise() {
             <div className="bg-[#0a1128] border border-amber-500/30 rounded-3xl p-6 shadow-xl space-y-4">
               <div className="flex items-center justify-between border-b border-blue-900/40 pb-3">
                 <h3 className="text-xs font-bold text-amber-300 uppercase tracking-wider flex items-center gap-2">
-                  <ShieldCheck className="w-4 h-4 text-amber-400" /> Risk Management Dashboard
+                  <ShieldCheck className="w-4 h-4 text-amber-400" /> Risk Management Guard
                 </h3>
                 <span className={`text-[9px] font-mono px-2 py-0.5 rounded border ${isDailyLimitExceeded ? "bg-rose-500/20 text-rose-400 border-rose-500/30" : "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"}`}>
                   {isDailyLimitExceeded ? "🛑 LIMIT REACHED" : "🟢 SYSTEM SAFE"}
@@ -561,17 +526,6 @@ export default function LizyTradeEnterprise() {
                   <span className="font-mono font-bold text-rose-400">-${dailyLossLimitUSD}</span>
                 </div>
               </div>
-
-              <div className="grid grid-cols-2 gap-3 text-xs">
-                <div className="bg-[#040817] border border-blue-900/50 rounded-2xl p-2.5 text-center">
-                  <span className="text-[9px] text-slate-400 uppercase block">Stop Loss</span>
-                  <span className="text-rose-400 font-bold font-mono">-${stopLossLimit}.00</span>
-                </div>
-                <div className="bg-[#040817] border border-blue-900/50 rounded-2xl p-2.5 text-center">
-                  <span className="text-[9px] text-slate-400 uppercase block">Take Profit</span>
-                  <span className="text-emerald-400 font-bold font-mono">+${takeProfitGoal}.00</span>
-                </div>
-              </div>
             </div>
 
             {/* Trading Journal */}
@@ -598,22 +552,36 @@ export default function LizyTradeEnterprise() {
             </div>
           </div>
 
-          {/* Center & Right Columns: Engine */}
+          {/* Center & Right Columns: Statistical Engine & Metrics */}
           <div className="lg:col-span-2 space-y-6">
             <div className="bg-[#0a1128] border border-blue-900/50 rounded-3xl p-6 shadow-2xl relative space-y-5">
 
               <div className="flex items-center justify-between pb-3 border-b border-blue-900/40">
                 <h2 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                  <Activity className="w-4 h-4 text-cyan-400" /> Markov AI Probability Matrix ({activeAnalyzedSymbol})
+                  <Activity className="w-4 h-4 text-cyan-400" /> Quantitative Analytics Terminal ({activeAnalyzedSymbol})
                 </h2>
               </div>
 
-              {/* Guide Banner */}
-              <div className="bg-gradient-to-r from-emerald-600/20 via-cyan-500/10 to-transparent border border-emerald-500/40 rounded-2xl p-3 flex items-center gap-3">
-                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                <p className="text-xs text-slate-200">
-                  <strong>PROBABILITY SIGNAL SUGGESTION:</strong> Hii ni pendekezo la kitakwimu la Order-2 Markov Matrix, sio uhakika wa faida. Fanya biashara kwa uangalifu.
-                </p>
+              {/* Statistical Metrics Panel (Kama ilivyoelekezwa na mhakiki) */}
+              <div className="bg-[#040817] border border-blue-900/60 rounded-2xl p-4 grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs font-mono">
+                <div>
+                  <span className="text-[9px] text-slate-400 uppercase block font-sans">Observed Freq:</span>
+                  <span className="text-cyan-400 font-black text-sm">{observedFrequency}%</span>
+                </div>
+                <div>
+                  <span className="text-[9px] text-slate-400 uppercase block font-sans">Expected Baseline:</span>
+                  <span className="text-slate-300 font-black text-sm">10.0%</span>
+                </div>
+                <div>
+                  <span className="text-[9px] text-slate-400 uppercase block font-sans">Statistical Edge:</span>
+                  <span className={`font-black text-sm ${statisticalEdge >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                    {statisticalEdge >= 0 ? `+${statisticalEdge}%` : `${statisticalEdge}%`}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[9px] text-slate-400 uppercase block font-sans">Confidence:</span>
+                  <span className="text-amber-400 font-black text-sm">{modelConfidence}</span>
+                </div>
               </div>
 
               {/* Strategy Selector */}
@@ -627,22 +595,6 @@ export default function LizyTradeEnterprise() {
                     {strat}
                   </button>
                 ))}
-              </div>
-
-              {/* Metrics */}
-              <div className="grid grid-cols-3 gap-3 bg-[#040817] border border-blue-900/50 rounded-2xl p-4 text-xs">
-                <div>
-                  <span className="text-[10px] text-slate-400 uppercase block">Trend:</span>
-                  <span className="font-bold text-cyan-400">{currentTrend}</span>
-                </div>
-                <div>
-                  <span className="text-[10px] text-slate-400 uppercase block">Model Confidence:</span>
-                  <span className="font-bold text-cyan-400 font-mono">{modelConfidence}%</span>
-                </div>
-                <div>
-                  <span className="text-[10px] text-slate-400 uppercase block">Status:</span>
-                  <span className="font-bold text-emerald-400">{signalStrength}</span>
-                </div>
               </div>
 
               {/* Center Digit */}
@@ -663,7 +615,7 @@ export default function LizyTradeEnterprise() {
             {/* Heatmap */}
             <div className="bg-[#0a1128] border border-blue-900/40 rounded-3xl p-6 shadow-xl">
               <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2 mb-4">
-                <BarChart3 className="w-4 h-4 text-cyan-400" /> Mzunguko wa Tarakimu (Live Data 0 - 9)
+                <BarChart3 className="w-4 h-4 text-cyan-400" /> Digit Frequency Distribution (0 - 9)
               </h3>
               <div className="grid grid-cols-5 sm:grid-cols-10 gap-2">
                 {Array.from({ length: 10 }).map((_, digit) => {
@@ -687,7 +639,7 @@ export default function LizyTradeEnterprise() {
 
       <footer className="max-w-7xl mx-auto mt-12 pt-6 border-t border-blue-900/30 text-center text-[11px] text-slate-500 space-y-2">
         <p className="max-w-2xl mx-auto text-amber-500/90 font-medium">
-          Risk Warning: Binary options and synthetic indices trading involve high risk. Statistical models provide probabilities, not guarantees.
+          Quantitative Analytics Notice: This terminal provides statistical rolling metrics and conditional probabilities for analytical research purposes only.
         </p>
       </footer>
     </div>

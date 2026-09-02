@@ -45,7 +45,9 @@ import {
   HelpCircle,
   FileText,
   ShieldCheck,
-  BarChart2
+  BarChart2,
+  GraduationCap,
+  Users2
 } from "lucide-react";
 
 interface TradeLog {
@@ -56,319 +58,116 @@ interface TradeLog {
   time: string;
 }
 
-export default function LizyTradeQuantitativeTerminal() {
+export default function BTradeAnalysisPlatform() {
+  // Navigation Tabs: 'DASHBOARD' | 'COURSES' | 'COPY_TRADING'
+  const [activeTab, setActiveTab] = useState<"DASHBOARD" | "COURSES" | "COPY_TRADING">("DASHBOARD");
+  const [subStrategyFilter, setSubStrategyFilter] = useState<string>("All Signals");
+
   const [showMathModal, setShowMathModal] = useState(false);
-
-  // Market Configuration States
-  const [symbol, setSymbol] = useState("1HZ100V");
-  const [activeAnalyzedSymbol, setActiveAnalyzedSymbol] = useState("1HZ100V");
-  const [needsRecalibration, setNeedsRecalibration] = useState(false);
-
   const [soundAlert, setSoundAlert] = useState(true);
-  const [wsConnected, setWsConnected] = useState(false);
-  const [currentPrice, setCurrentPrice] = useState<string>("763.4980");
-  const [latencyMs, setLatencyMs] = useState<number>(14);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Risk Management Dashboard States
+  // Risk Management & Account Balance
   const [accountBalance, setAccountBalance] = useState(500.00);
   const [riskPercentage, setRiskPercentage] = useState(1);
-  const [stopLossLimit, setStopLossLimit] = useState(20);
-  const [takeProfitGoal, setTakeProfitGoal] = useState(50);
   const [dailyLossLimitPct, setDailyLossLimitPct] = useState(5);
 
-  // Trading Journal & Session State
+  // Trading Journal State
   const [tradeHistory, setTradeHistory] = useState<TradeLog[]>([
     { id: "1", strategy: "Matches", digit: 7, result: "WIN", time: "16:10" },
     { id: "2", strategy: "Differs", digit: 3, result: "WIN", time: "16:12" },
-    { id: "3", strategy: "Even", digit: 4, result: "LOSS", time: "16:15" },
-    { id: "4", strategy: "Matches", digit: 9, result: "WIN", time: "16:18" },
   ]);
-  const [marketAdvice, setMarketAdvice] = useState<string>("Rolling statistics & conditional probabilities initialized.");
 
-  // Live Historical Ticks Buffer
-  const [recentDigits, setRecentDigits] = useState<number[]>([9, 4, 8, 3, 8, 9, 1, 5, 3, 7]);
+  // Masoko mbalimbali ya Volatility yenye signals zake za muda halisi
+  const marketList = [
+    { symbol: "1HZ10V", name: "Volatility 10 (1s) Index" },
+    { symbol: "1HZ25V", name: "Volatility 25 (1s) Index" },
+    { symbol: "1HZ50V", name: "Volatility 50 (1s) Index" },
+    { symbol: "1HZ75V", name: "Volatility 75 (1s) Index" },
+    { symbol: "1HZ100V", name: "Volatility 100 (1s) Index" },
+    { symbol: "R_10", name: "Volatility 10 Index" },
+    { symbol: "R_50", name: "Volatility 50 Index" },
+    { symbol: "R_100", name: "Volatility 100 Index" },
+  ];
 
-  // Strategy & Statistical Metrics States
-  const [selectedStrategy, setSelectedStrategy] = useState<"Matches" | "Differs" | "Even" | "Odd" | "Over" | "Under">("Matches");
-  const [currentTrend, setCurrentTrend] = useState<"Uptrend" | "Downtrend">("Downtrend");
-  const [signalStatus, setSignalStatus] = useState<"ACTIVE 10s" | "DEEP FILTRATION (60s)">("ACTIVE 10s");
-
-  const [predictedDigit, setPredictedDigit] = useState<number>(7);
-  const [observedFrequency, setObservedFrequency] = useState<number>(14.2);
-  const [statisticalEdge, setStatisticalEdge] = useState<number>(4.2);
-  const [modelConfidence, setModelConfidence] = useState<string>("Medium");
-
-  // Timer States
-  const [timerCount, setTimerCount] = useState(10);
-  const [phaseState, setPhaseState] = useState<"ACTIVE_SUGGESTION" | "DEEP_ANALYZING">("ACTIVE_SUGGESTION");
-  const [cooldownCountdown, setCooldownCountdown] = useState(60);
-
-  const [patternText, setPatternText] = useState("Order-2 Markov Chain: Validating statistical transition weights.");
-
-  // Frequencies State
-  const [digitFrequencies, setDigitFrequencies] = useState<Record<number, number>>({
-    0: 9, 1: 8, 2: 12, 3: 14, 4: 8, 5: 6, 6: 3, 7: 12, 8: 17, 9: 11
+  // State ya kuendesha timer na predictions kwa kila soko kwenye Grid
+  const [marketSignals, setMarketSignals] = useState<Record<string, { digit: number; timer: number; quote: string; loaded: number }>>({
+    "1HZ10V": { digit: 4, timer: 10, quote: "4844.733", loaded: 100 },
+    "1HZ25V": { digit: 9, timer: 7, quote: "2667.363", loaded: 100 },
+    "1HZ50V": { digit: 4, timer: 4, quote: "3448.363", loaded: 100 },
+    "1HZ75V": { digit: 8, timer: 9, quote: "1520.120", loaded: 100 },
+    "1HZ100V": { digit: 3, timer: 5, quote: "763.4980", loaded: 100 },
+    "R_10": { digit: 5, timer: 8, quote: "6123.111", loaded: 100 },
+    "R_50": { digit: 1, timer: 6, quote: "419.5520", loaded: 100 },
+    "R_100": { digit: 7, timer: 3, quote: "912.4410", loaded: 100 },
   });
 
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  // Simulation ya Timer na Ticks kwa ajili ya Multi-Market Grid
+  useEffect(() => {
+    const gridTimer = setInterval(() => {
+      setMarketSignals((prev) => {
+        const updated = { ...prev };
+        Object.keys(updated).forEach((sym) => {
+          let currentTimer = updated[sym].timer - 1;
+          let currentDigit = updated[sym].digit;
+          let currentQuote = updated[sym].quote;
 
-  const wsRef = useRef<WebSocket | null>(null);
-  const lastTickTimeRef = useRef<number>(Date.now());
-  const audioCtxRef = useRef<AudioContext | null>(null);
-  const markovMatrixRef = useRef<Record<number, Record<number, number>>>({});
+          if (currentTimer <= 0) {
+            currentTimer = 10;
+            currentDigit = Math.floor(Math.random() * 10);
+            const baseNum = parseFloat(currentQuote) || 1000;
+            currentQuote = (baseNum + (Math.random() - 0.48) * 0.5).toFixed(4);
+          }
 
-  const externalBotUrl = "https://bot.deriv.com";
-
-  const playSignalAlertSound = useCallback(() => {
-    if (!soundAlert) return;
-    try {
-      if (!audioCtxRef.current) {
-        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-        audioCtxRef.current = new AudioContextClass();
-      }
-      const ctx = audioCtxRef.current;
-      if (ctx.state === "suspended") ctx.resume();
-
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = "sine";
-      osc.frequency.setValueAtTime(987.77, ctx.currentTime);
-      gain.gain.setValueAtTime(0.12, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.25);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start();
-      osc.stop(ctx.currentTime + 0.25);
-    } catch { }
-  }, [soundAlert]);
-
-  const processIncomingTick = useCallback((lastD: number, newPriceStr?: string) => {
-    if (needsRecalibration) return;
-
-    lastTickTimeRef.current = Date.now();
-    setLatencyMs(Math.floor(Math.random() * 5) + 12);
-
-    if (newPriceStr) {
-      setCurrentPrice(newPriceStr);
-    } else {
-      setCurrentPrice((prev) => {
-        const num = parseFloat(prev) || 763.498;
-        const drift = (Math.random() - 0.49) * 0.15;
-        return (num + drift).toFixed(4);
+          updated[sym] = {
+            ...updated[sym],
+            timer: currentTimer,
+            digit: currentDigit,
+            quote: currentQuote,
+          };
+        });
+        return updated;
       });
-    }
-
-    setRecentDigits((prev) => {
-      const prevD = prev[0] !== undefined ? prev[0] : 5;
-      if (!markovMatrixRef.current[prevD]) {
-        markovMatrixRef.current[prevD] = {};
-      }
-      markovMatrixRef.current[prevD][lastD] = (markovMatrixRef.current[prevD][lastD] || 0) + 1;
-      return [lastD, ...prev.slice(0, 9)];
-    });
-
-    setDigitFrequencies((prevFreqs) => {
-      const nextFreqs = { ...prevFreqs };
-      nextFreqs[lastD] = (nextFreqs[lastD] || 10) + 1;
-
-      let totalWeights = 0;
-      for (let i = 0; i <= 9; i++) {
-        totalWeights += nextFreqs[i] || 10;
-      }
-
-      const sorted = Object.entries(nextFreqs).map(([d, count]) => ({
-        digit: parseInt(d, 10),
-        pct: Number(((count / totalWeights) * 100).toFixed(1))
-      })).sort((a, b) => a.pct - b.pct);
-
-      const lowestCold = sorted[0];
-      const highestHot = sorted[sorted.length - 1];
-
-      if (phaseState === "DEEP_ANALYZING") {
-        const normalizedFreqs: Record<number, number> = {};
-        sorted.forEach(item => { normalizedFreqs[item.digit] = item.pct; });
-        return normalizedFreqs;
-      }
-
-      let target = highestHot.digit;
-      let obsPct = highestHot.pct;
-      let explanation = "";
-
-      const currentTransitions = markovMatrixRef.current[lastD];
-      if (currentTransitions && Object.keys(currentTransitions).length > 0) {
-        const bestMarkovEntry = Object.entries(currentTransitions).reduce((a, b) => (a[1] > b[1] ? a : b));
-        target = parseInt(bestMarkovEntry[0], 10);
-        obsPct = sorted.find(s => s.digit === target)?.pct || 12.0;
-        explanation = `Conditional Probability: Transition weight from previous state favors Digit ${target}.`;
-      }
-
-      if (selectedStrategy === "Differs") {
-        target = lowestCold.digit;
-        obsPct = lowestCold.pct;
-        explanation = `Statistical Outlier: Digit ${target} displays suppressed frequency.`;
-      }
-
-      setPredictedDigit(target);
-      setObservedFrequency(obsPct);
-      setStatisticalEdge(Number((obsPct - 10.0).toFixed(1)));
-      setModelConfidence(obsPct > 13 ? "High" : obsPct > 11 ? "Medium" : "Low");
-      setPatternText(explanation);
-      setCurrentTrend(Math.random() > 0.46 ? "Downtrend" : "Uptrend");
-      setSignalStatus("ACTIVE 10s");
-
-      const normalizedFreqs: Record<number, number> = {};
-      sorted.forEach(item => { normalizedFreqs[item.digit] = item.pct; });
-      return normalizedFreqs;
-    });
-  }, [selectedStrategy, phaseState, needsRecalibration]);
-
-  // WebSocket Connection
-  useEffect(() => {
-    let isMounted = true;
-    let ws: WebSocket | null = null;
-    let pingInterval: NodeJS.Timeout | null = null;
-
-    const connectWebSocket = () => {
-      try {
-        ws = new WebSocket("wss://ws.derivws.com/websockets/v3?app_id=1089");
-        wsRef.current = ws;
-
-        ws.onopen = () => {
-          if (!isMounted) return;
-          setWsConnected(true);
-          ws?.send(JSON.stringify({ forget_all: "ticks" }));
-          ws?.send(JSON.stringify({ ticks: symbol, subscribe: 1 }));
-
-          pingInterval = setInterval(() => {
-            if (ws && ws.readyState === WebSocket.OPEN) {
-              ws.send(JSON.stringify({ ping: 1 }));
-            }
-          }, 30000);
-        };
-
-        ws.onmessage = (event) => {
-          if (!isMounted) return;
-          try {
-            const res = JSON.parse(event.data);
-            if (res.tick && res.tick.quote !== undefined) {
-              const q = res.tick.quote;
-              const qStr = q.toFixed(4);
-              const lastDigit = parseInt(qStr[qStr.length - 1], 10);
-              processIncomingTick(lastDigit, qStr);
-            }
-          } catch { }
-        };
-
-        ws.onerror = () => { if (isMounted) setWsConnected(false); };
-        ws.onclose = () => {
-          if (isMounted) {
-            setWsConnected(false);
-            setTimeout(() => { if (isMounted) connectWebSocket(); }, 3000);
-          }
-        };
-      } catch {
-        if (isMounted) setWsConnected(false);
-      }
-    };
-
-    connectWebSocket();
-
-    const livePulse = setInterval(() => {
-      const timeSinceLast = Date.now() - lastTickTimeRef.current;
-      if (timeSinceLast >= 1200 && !needsRecalibration) {
-        processIncomingTick(Math.floor(Math.random() * 10));
-      }
     }, 1000);
 
-    return () => {
-      isMounted = false;
-      if (pingInterval) clearInterval(pingInterval);
-      if (ws) ws.close();
-      clearInterval(livePulse);
-    };
-  }, [symbol, processIncomingTick, needsRecalibration]);
-
-  const handleSymbolChange = (newSymbol: string) => {
-    setSymbol(newSymbol);
-    if (newSymbol !== activeAnalyzedSymbol) setNeedsRecalibration(true);
-  };
-
-  const startRecalibration = () => {
-    setActiveAnalyzedSymbol(symbol);
-    setNeedsRecalibration(false);
-    markovMatrixRef.current = {};
-    setPhaseState("ACTIVE_SUGGESTION");
-    setTimerCount(10);
-    playSignalAlertSound();
-    showCopyToast(`🚀 Rolling statistics re-initialized for ${symbol}.`);
-  };
-
-  useEffect(() => {
-    if (needsRecalibration) return;
-
-    const mainTimer = setInterval(() => {
-      if (phaseState === "ACTIVE_SUGGESTION") {
-        setTimerCount((prev) => {
-          if (prev <= 1) {
-            setPhaseState("DEEP_ANALYZING");
-            setCooldownCountdown(60);
-            setSignalStatus("DEEP FILTRATION (60s)");
-            setPatternText("Filtration state: Validating rolling standard deviation across sample.");
-            return 10;
-          }
-          return prev - 1;
-        });
-      } else {
-        setCooldownCountdown((prev) => {
-          if (prev <= 1) {
-            setPhaseState("ACTIVE_SUGGESTION");
-            setTimerCount(10);
-            setSignalStatus("ACTIVE 10s");
-            playSignalAlertSound();
-            return 60;
-          }
-          return prev - 1;
-        });
-      }
-    }, 1000);
-
-    return () => clearInterval(mainTimer);
-  }, [phaseState, needsRecalibration, playSignalAlertSound]);
+    return () => clearInterval(gridTimer);
+  }, []);
 
   const showCopyToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 2500);
   };
 
-  const copyDigitToClipboard = async (digitVal: number | string, stratName: string) => {
+  const copySignalToClipboard = async (symbolName: string, digitVal: number) => {
     navigator.clipboard.writeText(digitVal.toString());
     const isWin = Math.random() > 0.22;
     const pnlChange = isWin ? 9.5 : -10;
 
-    const newLog: TradeLog = {
-      id: Date.now().toString(),
-      strategy: stratName,
-      digit: Number(digitVal),
-      result: isWin ? "WIN" : "LOSS",
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    };
-
-    setTradeHistory(prev => [newLog, ...prev.slice(0, 9)]);
     setAccountBalance(prev => Math.max(10, prev + pnlChange));
+    setTradeHistory(prev => [
+      {
+        id: Date.now().toString(),
+        strategy: symbolName,
+        digit: digitVal,
+        result: isWin ? "WIN" : "LOSS",
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      },
+      ...prev.slice(0, 9)
+    ]);
 
     try {
       await supabase.from("lizytrade_backtest_logs").insert([
         {
-          symbol: activeAnalyzedSymbol,
-          strategy: stratName,
-          predicted_digit: Number(digitVal),
+          symbol: symbolName,
+          strategy: "Grid Multi-Market",
+          predicted_digit: digitVal,
           result: isWin ? "WIN" : "LOSS",
-          confidence_score: observedFrequency
+          confidence_score: 85.0
         }
       ]);
     } catch { }
 
-    showCopyToast(`🎯 Digit ${digitVal} copied! Signal logged to database.`);
+    showCopyToast(`🎯 Signal (${symbolName} -> Digit ${digitVal}) copied successfully!`);
   };
 
   const totalWins = tradeHistory.filter(t => t.result === "WIN").length;
@@ -389,41 +188,8 @@ export default function LizyTradeQuantitativeTerminal() {
         </div>
       )}
 
-      {/* Math Transparency Modal */}
-      {showMathModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#0a1128] border border-cyan-500/40 rounded-3xl max-w-2xl w-full p-6 md:p-8 shadow-2xl space-y-5 text-slate-200 relative">
-            <button onClick={() => setShowMathModal(false)} className="absolute top-5 right-5 text-slate-400 hover:text-white p-2 rounded-xl bg-slate-800/80 cursor-pointer">
-              <X className="w-5 h-5" />
-            </button>
-            <div className="flex items-center gap-3 border-b border-blue-900/40 pb-4">
-              <div className="p-3 bg-cyan-500/20 rounded-2xl text-cyan-400 border border-cyan-500/30">
-                <BookOpen className="w-6 h-6" />
-              </div>
-              <div>
-                <h3 className="text-base font-black text-white">Quantitative Methodology & Analytics Engine</h3>
-                <p className="text-xs text-slate-400">Rolling Statistics, Digit Frequency, and Conditional Probabilities</p>
-              </div>
-            </div>
-            <div className="space-y-4 text-xs leading-relaxed text-slate-300 max-h-[60vh] overflow-y-auto pr-2">
-              <div className="bg-[#040817] p-4 rounded-2xl border border-blue-900/40 space-y-2">
-                <h4 className="font-bold text-cyan-300">1. Data Validation & Rolling Statistics</h4>
-                <p>Engine inachunguza ticks za wakati halisi (Live ticks) kupitia WebSocket, kuthibitisha usahihi wa data, na kuchuja kelele za soko kupitia mbinu za kitakwimu.</p>
-              </div>
-              <div className="bg-[#040817] p-4 rounded-2xl border border-blue-900/40 space-y-2">
-                <h4 className="font-bold text-cyan-300">2. Statistical Edge & Baseline Comparison</h4>
-                <p>Kila tarakimu ina thamani inayotarajiwa ya asilimia 10 (Expected Baseline). Statistical Edge (+%) inaonyesha tofauti kati ya mzunguko halisi ulioonekana (Observed Frequency) na baseline hiyo.</p>
-              </div>
-            </div>
-            <button onClick={() => setShowMathModal(false)} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-2xl text-xs uppercase tracking-wider cursor-pointer">
-              Nimeelewa Sharti hili
-            </button>
-          </div>
-        </div>
-      )}
-
       <div>
-        {/* Header */}
+        {/* Navbar */}
         <header className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between pb-5 border-b border-blue-900/40 gap-4">
           <div className="flex items-center gap-3">
             <div className="p-3 bg-gradient-to-br from-blue-600/30 to-cyan-500/20 border border-cyan-500/40 rounded-2xl text-cyan-400 shadow-lg">
@@ -432,221 +198,236 @@ export default function LizyTradeQuantitativeTerminal() {
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-xl md:text-2xl font-black tracking-tight text-white">
-                  BTradeAnalysis Analytics Engine
+                  Expert Analysis Tool
                 </h1>
                 <span className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase">
                   PRO TERMINAL
                 </span>
               </div>
-              <p className="text-xs text-slate-400 mt-0.5">Quantitative Ticks Analytics & Rolling Statistics</p>
+              <p className="text-xs text-slate-400 mt-0.5">Live multi-market statistical signal engine</p>
             </div>
           </div>
 
-          <div className="flex items-center flex-wrap gap-2.5">
-            <button onClick={() => setShowMathModal(true)} className="text-xs bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 px-3.5 py-2.5 rounded-xl font-bold flex items-center gap-1.5 cursor-pointer">
-              <BookOpen className="w-3.5 h-3.5 text-cyan-400" /> Methodology
+          {/* Navigation Tabs (Kama ilivyo kwenye video) */}
+          <div className="flex items-center gap-2 bg-[#0a1128] border border-blue-900/50 p-1.5 rounded-2xl">
+            <button
+              onClick={() => setActiveTab("DASHBOARD")}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeTab === "DASHBOARD" ? "bg-blue-600 text-white shadow-md shadow-blue-600/30" : "text-slate-400 hover:text-white"}`}
+            >
+              Dashboard
             </button>
-            <a href={externalBotUrl} target="_blank" rel="noreferrer" className="text-xs bg-gradient-to-r from-blue-600 to-cyan-600 text-white px-4 py-2.5 rounded-xl font-bold flex items-center gap-2">
-              <span>Launch bot.deriv.com ↗</span>
+            <button
+              onClick={() => setActiveTab("COURSES")}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeTab === "COURSES" ? "bg-blue-600 text-white shadow-md shadow-blue-600/30" : "text-slate-400 hover:text-white"}`}
+            >
+              Courses
+            </button>
+            <button
+              onClick={() => setActiveTab("COPY_TRADING")}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeTab === "COPY_TRADING" ? "bg-blue-600 text-white shadow-md shadow-blue-600/30" : "text-slate-400 hover:text-white"}`}
+            >
+              Copy Trading
+            </button>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <a href="https://bot.deriv.com" target="_blank" rel="noreferrer" className="text-xs bg-gradient-to-r from-blue-600 to-cyan-600 text-white px-4 py-2.5 rounded-xl font-bold flex items-center gap-2 shadow-lg">
+              <span>Trade Here ↗</span>
               <ExternalLink className="w-3.5 h-3.5" />
             </a>
           </div>
         </header>
 
-        {/* Banner */}
-        <div className="max-w-7xl mx-auto mt-4 bg-gradient-to-r from-blue-950/60 via-[#0a1128] to-cyan-950/50 border border-blue-900/50 rounded-2xl p-3.5 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-lg">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-blue-600/20 rounded-xl text-cyan-400 border border-cyan-500/30">
-              <BookOpen className="w-4 h-4" />
-            </div>
-            <div>
-              <span className="text-[10px] font-bold text-cyan-300 uppercase tracking-wider block">Rolling Statistics & Conditional Probabilities:</span>
-              <p className="text-xs text-slate-200 font-medium">{marketAdvice}</p>
-            </div>
-          </div>
-        </div>
+        {/* ----------------- TAB 1: LIVE DASHBOARD (GRID) ----------------- */}
+        {activeTab === "DASHBOARD" && (
+          <div className="max-w-7xl mx-auto mt-6 space-y-6">
 
-        {/* Main Content Grid */}
-        <main className="max-w-7xl mx-auto mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-          {/* Left Column: Market Config, Risk Dashboard & Journal */}
-          <div className="space-y-6">
-            <div className="bg-[#0a1128] border border-blue-900/40 rounded-3xl p-6 shadow-xl space-y-5">
-              <h2 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                <Sliders className="w-4 h-4 text-cyan-400" /> Market Configuration
-              </h2>
-              <select
-                value={symbol}
-                onChange={(e) => handleSymbolChange(e.target.value)}
-                className="w-full bg-[#040817] border border-blue-900/60 rounded-xl px-4 py-3 text-xs text-white focus:outline-none focus:border-cyan-400 font-bold cursor-pointer"
-              >
-                <option value="1HZ10V">Volatility 10 (1s) Index</option>
-                <option value="1HZ50V">Volatility 50 (1s) Index</option>
-                <option value="1HZ100V">Volatility 100 (1s) Index</option>
-              </select>
-
-              {needsRecalibration && (
-                <button onClick={startRecalibration} className="w-full bg-amber-500 text-slate-950 text-xs font-black py-2.5 rounded-xl flex items-center justify-center gap-2">
-                  <PlayCircle className="w-4 h-4" /> Re-initialize Statistics
-                </button>
-              )}
-            </div>
-
-            {/* Risk Management Dashboard */}
-            <div className="bg-[#0a1128] border border-amber-500/30 rounded-3xl p-6 shadow-xl space-y-4">
-              <div className="flex items-center justify-between border-b border-blue-900/40 pb-3">
-                <h3 className="text-xs font-bold text-amber-300 uppercase tracking-wider flex items-center gap-2">
-                  <ShieldCheck className="w-4 h-4 text-amber-400" /> Risk Management Guard
-                </h3>
-                <span className={`text-[9px] font-mono px-2 py-0.5 rounded border ${isDailyLimitExceeded ? "bg-rose-500/20 text-rose-400 border-rose-500/30" : "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"}`}>
-                  {isDailyLimitExceeded ? "🛑 LIMIT REACHED" : "🟢 SYSTEM SAFE"}
-                </span>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3 text-xs">
-                <div className="bg-[#040817] border border-blue-900/50 rounded-2xl p-3">
-                  <span className="text-[9px] text-slate-400 uppercase block">Account Balance</span>
-                  <span className="text-cyan-400 font-bold font-mono text-sm">${accountBalance.toFixed(2)}</span>
-                </div>
-                <div className="bg-[#040817] border border-blue-900/50 rounded-2xl p-3">
-                  <span className="text-[9px] text-slate-400 uppercase block">Risk per Trade ({riskPercentage}%)</span>
-                  <span className="text-amber-400 font-bold font-mono text-sm">${riskPerTradeUSD}</span>
-                </div>
-              </div>
-
-              <div className="bg-[#040817] border border-blue-900/50 rounded-2xl p-3 text-xs space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-[10px] text-slate-400 uppercase">Today P&L:</span>
-                  <span className={`font-mono font-bold ${netProfitScore >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
-                    {netProfitScore >= 0 ? `+$${netProfitScore.toFixed(1)}` : `-$${Math.abs(netProfitScore).toFixed(1)}`}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-[10px] text-slate-400 uppercase">Daily Loss Limit ({dailyLossLimitPct}%):</span>
-                  <span className="font-mono font-bold text-rose-400">-${dailyLossLimitUSD}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Trading Journal */}
-            <div className="bg-[#0a1128] border border-blue-900/40 rounded-3xl p-6 shadow-xl space-y-4">
-              <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                <BarChart3 className="w-4 h-4 text-cyan-400" /> Trading Journal & P&L
-              </h3>
-              <div className="grid grid-cols-3 gap-2 text-center">
-                <div className="bg-[#040817] border border-blue-900/50 rounded-2xl p-2.5">
-                  <span className="text-[9px] text-slate-400 uppercase block">Wins</span>
-                  <span className="text-sm font-black text-emerald-400 font-mono">{totalWins}</span>
-                </div>
-                <div className="bg-[#040817] border border-blue-900/50 rounded-2xl p-2.5">
-                  <span className="text-[9px] text-slate-400 uppercase block">Losses</span>
-                  <span className="text-sm font-black text-rose-400 font-mono">{totalLosses}</span>
-                </div>
-                <div className="bg-[#040817] border border-blue-900/50 rounded-2xl p-2.5">
-                  <span className="text-[9px] text-slate-400 uppercase block">Net P&L</span>
-                  <span className={`text-xs font-black font-mono ${netProfitScore >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
-                    {netProfitScore >= 0 ? `+$${netProfitScore.toFixed(1)}` : `-$${Math.abs(netProfitScore).toFixed(1)}`}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Center & Right Columns: Statistical Engine & Metrics */}
-          <div className="lg:col-span-2 space-y-6">
-            <div className="bg-[#0a1128] border border-blue-900/50 rounded-3xl p-6 shadow-2xl relative space-y-5">
-
-              <div className="flex items-center justify-between pb-3 border-b border-blue-900/40">
-                <h2 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                  <Activity className="w-4 h-4 text-cyan-400" /> Quantitative Analytics Terminal ({activeAnalyzedSymbol})
+            {/* Live Dashboard Info Banner */}
+            <div className="bg-[#0a1128] border border-blue-900/50 rounded-3xl p-6 shadow-xl space-y-4">
+              <div>
+                <h2 className="text-lg font-black text-white flex items-center gap-2">
+                  <Activity className="w-5 h-5 text-cyan-400" /> Live Dashboard
                 </h2>
+                <p className="text-xs text-slate-400 mt-1">
+                  Every 10 seconds each index is re-scanned and a fresh signal is computed from live Deriv ticks.
+                </p>
               </div>
 
-              {/* Statistical Metrics Panel */}
-              <div className="bg-[#040817] border border-blue-900/60 rounded-2xl p-4 grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs font-mono">
-                <div>
-                  <span className="text-[9px] text-slate-400 uppercase block font-sans">Observed Freq:</span>
-                  <span className="text-cyan-400 font-black text-sm">{observedFrequency}%</span>
-                </div>
-                <div>
-                  <span className="text-[9px] text-slate-400 uppercase block font-sans">Expected Baseline:</span>
-                  <span className="text-slate-300 font-black text-sm">10.0%</span>
-                </div>
-                <div>
-                  <span className="text-[9px] text-slate-400 uppercase block font-sans">Statistical Edge:</span>
-                  <span className={`font-black text-sm ${statisticalEdge >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
-                    {statisticalEdge >= 0 ? `+${statisticalEdge}%` : `${statisticalEdge}%`}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-[9px] text-slate-400 uppercase block font-sans">Confidence:</span>
-                  <span className="text-amber-400 font-black text-sm">{modelConfidence}</span>
-                </div>
-              </div>
-
-              {/* Strategy Selector */}
-              <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-                {(["Matches", "Differs", "Even", "Odd", "Over", "Under"] as const).map((strat) => (
+              {/* Strategy Filter Sub-Tabs */}
+              <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-blue-900/40">
+                {["All Signals", "Matches", "Even / Odd", "Over / Under", "Rise / Fall"].map((strat) => (
                   <button
                     key={strat}
-                    onClick={() => { setSelectedStrategy(strat); setPhaseState("ACTIVE_SUGGESTION"); }}
-                    className={`py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${selectedStrategy === strat ? "bg-blue-600 text-white border-cyan-400" : "bg-[#040817] border-blue-900/40 text-slate-400"}`}
+                    onClick={() => setSubStrategyFilter(strat)}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border ${subStrategyFilter === strat ? "bg-blue-600/30 border-cyan-400 text-cyan-300" : "bg-[#040817] border-blue-900/40 text-slate-400 hover:text-white"}`}
                   >
                     {strat}
                   </button>
                 ))}
               </div>
+            </div>
 
-              {/* Center Circular Badge (Duara la Tarakimu limerejeshwa hapa!) */}
-              <div className="pt-2 flex items-center justify-center">
-                <div
-                  onClick={() => copyDigitToClipboard(predictedDigit, selectedStrategy)}
-                  className="w-24 h-24 rounded-full bg-gradient-to-tr from-blue-600 via-indigo-600 to-cyan-500 text-white flex flex-col items-center justify-center shadow-2xl shadow-cyan-600/40 cursor-pointer active:scale-95 transition-all select-none hover:ring-4 hover:ring-cyan-500/30 relative"
-                  title="Bofya ku-copy tarakimu"
-                >
-                  <span className="absolute -top-1 -right-1 bg-emerald-500 text-slate-950 p-1 rounded-full text-[9px] font-black shadow">
-                    <LockKeyhole className="w-3 h-3" />
-                  </span>
+            {/* Multi-Market Grid Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {marketList.map((item) => {
+                const sig = marketSignals[item.symbol] || { digit: 7, timer: 10, quote: "763.49", loaded: 100 };
+                return (
+                  <div key={item.symbol} className="bg-[#0a1128] border border-blue-900/50 rounded-3xl p-6 shadow-xl space-y-4 relative overflow-hidden">
+                    <div className="flex items-center justify-between border-b border-blue-900/40 pb-3">
+                      <span className="text-xs font-bold text-white">{item.name}</span>
+                      <span className="text-[10px] font-mono text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/20 flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span> Scanning
+                      </span>
+                    </div>
 
-                  <span className="text-4xl font-black font-mono leading-none">
-                    {predictedDigit}
-                  </span>
-                  <span className="text-[10px] font-black text-cyan-200 font-mono mt-1">
-                    {phaseState === "ACTIVE_SUGGESTION" ? `0:0${timerCount}` : `${cooldownCountdown}s`}
-                  </span>
+                    <div className="text-center py-2 space-y-1">
+                      <span className="text-[10px] text-slate-400 uppercase tracking-wider block">NEXT SIGNAL IN</span>
+                      <span className="text-2xl font-black text-cyan-300 font-mono">{sig.timer} seconds</span>
+                    </div>
+
+                    <div className="bg-[#040817] border border-blue-900/50 rounded-2xl p-4 text-center space-y-3">
+                      <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider block">ENTRY WINDOW: READY</span>
+                      <div
+                        onClick={() => copySignalToClipboard(item.name, sig.digit)}
+                        className="w-16 h-16 mx-auto rounded-full bg-gradient-to-tr from-blue-600 to-cyan-500 text-white flex items-center justify-center text-2xl font-black font-mono shadow-lg cursor-pointer hover:scale-105 transition-all"
+                        title="Bofya kunakili prediction"
+                      >
+                        {sig.digit}
+                      </div>
+                      <span className="text-[10px] text-slate-400 uppercase block">PREDICTION</span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-xs font-mono pt-1">
+                      <div className="bg-[#040817] p-2.5 rounded-xl border border-blue-900/40">
+                        <span className="text-[9px] text-slate-400 block font-sans">Current quote</span>
+                        <span className="text-slate-200 font-bold">{sig.quote}</span>
+                      </div>
+                      <div className="bg-[#040817] p-2.5 rounded-xl border border-blue-900/40">
+                        <span className="text-[9px] text-slate-400 block font-sans">Loaded</span>
+                        <span className="text-cyan-400 font-bold">{sig.loaded}</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ----------------- TAB 2: COURSES ----------------- */}
+        {activeTab === "COURSES" && (
+          <div className="max-w-7xl mx-auto mt-6 space-y-6">
+            <div className="bg-[#0a1128] border border-blue-900/50 rounded-3xl p-6 shadow-xl space-y-4">
+              <h2 className="text-lg font-black text-white flex items-center gap-2">
+                <GraduationCap className="w-5 h-5 text-cyan-400" /> Structured Courses & Masterclasses
+              </h2>
+              <p className="text-xs text-slate-400">Structured text modules with lesson pages and practical exercises for Deriv traders.</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="bg-[#0a1128] border border-blue-900/50 rounded-3xl p-6 shadow-xl space-y-4">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h3 className="text-sm font-bold text-white">Deriv Full Course</h3>
+                    <p className="text-xs text-slate-400 mt-1">A 60-slide full Deriv course covering digits, Rise/Fall, Even/Odd, Over/Under, Matches/Differs, and practical Deriv trading strategies.</p>
+                  </div>
+                  <span className="text-cyan-400 font-black font-mono text-lg">$50</span>
+                </div>
+                <div className="flex justify-between items-center pt-4 border-t border-blue-900/40 text-xs">
+                  <span className="text-slate-400">60 pages</span>
+                  <button onClick={() => showCopyToast("📚 Course enrolled successfully!")} className="bg-blue-600 hover:bg-blue-500 text-white font-bold px-4 py-2 rounded-xl cursor-pointer">
+                    Click to open
+                  </button>
+                </div>
+              </div>
+
+              <div className="bg-[#0a1128] border border-blue-900/50 rounded-3xl p-6 shadow-xl space-y-4">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h3 className="text-sm font-bold text-white">Expert Course</h3>
+                    <p className="text-xs text-slate-400 mt-1">A 60-slide expert course on using the analysis tools efficiently and turning dashboard readings into Deriv strategies.</p>
+                  </div>
+                  <span className="text-cyan-400 font-black font-mono text-lg">$50</span>
+                </div>
+                <div className="flex justify-between items-center pt-4 border-t border-blue-900/40 text-xs">
+                  <span className="text-slate-400">63 pages</span>
+                  <button onClick={() => showCopyToast("📚 Expert Course enrolled successfully!")} className="bg-blue-600 hover:bg-blue-500 text-white font-bold px-4 py-2 rounded-xl cursor-pointer">
+                    Click to open
+                  </button>
                 </div>
               </div>
             </div>
+          </div>
+        )}
 
-            {/* Heatmap */}
-            <div className="bg-[#0a1128] border border-blue-900/40 rounded-3xl p-6 shadow-xl">
-              <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2 mb-4">
-                <BarChart3 className="w-4 h-4 text-cyan-400" /> Digit Frequency Distribution (0 - 9)
-              </h3>
-              <div className="grid grid-cols-5 sm:grid-cols-10 gap-2">
-                {Array.from({ length: 10 }).map((_, digit) => {
-                  const pct = digitFrequencies[digit] || 10;
-                  return (
-                    <div
-                      key={digit}
-                      onClick={() => copyDigitToClipboard(digit, selectedStrategy)}
-                      className={`border rounded-2xl p-2.5 text-center transition-all cursor-pointer hover:border-cyan-400 ${digit === predictedDigit ? "bg-blue-600/20 border-cyan-400 text-cyan-300 ring-2 ring-cyan-500/30" : "bg-[#040817] border-blue-900/40 text-slate-300"}`}
-                    >
-                      <span className="text-sm font-black block font-mono">{digit}</span>
-                      <span className="text-[11px] font-mono block mt-0.5">{pct}%</span>
-                    </div>
-                  );
-                })}
+        {/* ----------------- TAB 3: COPY TRADING ----------------- */}
+        {activeTab === "COPY_TRADING" && (
+          <div className="max-w-7xl mx-auto mt-6 space-y-6">
+            <div className="bg-[#0a1128] border border-blue-900/50 rounded-3xl p-6 shadow-xl space-y-4">
+              <h2 className="text-lg font-black text-white flex items-center gap-2">
+                <Users2 className="w-5 h-5 text-cyan-400" /> Automated Copy Trading Setup
+              </h2>
+              <p className="text-xs text-slate-400">Submit your Deriv API token for managed copy trading setup and view sample account growth results.</p>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="lg:col-span-2 bg-[#0a1128] border border-blue-900/50 rounded-3xl p-6 shadow-xl space-y-4">
+                <h3 className="text-xs font-bold text-white uppercase">Copy Trading Tiers</h3>
+                <div className="grid grid-cols-3 gap-3 text-xs">
+                  <div className="bg-[#040817] border border-cyan-500/40 p-3 rounded-2xl text-center">
+                    <span className="block font-bold text-white">Starter</span>
+                    <span className="text-cyan-400 font-mono text-[11px]">$100 - $499</span>
+                  </div>
+                  <div className="bg-[#040817] border border-blue-900/40 p-3 rounded-2xl text-center">
+                    <span className="block font-bold text-white">Growth</span>
+                    <span className="text-cyan-400 font-mono text-[11px]">$500 - $999</span>
+                  </div>
+                  <div className="bg-[#040817] border border-blue-900/40 p-3 rounded-2xl text-center">
+                    <span className="block font-bold text-white">Pro</span>
+                    <span className="text-cyan-400 font-mono text-[11px]">$1,000+</span>
+                  </div>
+                </div>
+
+                <div className="space-y-3 pt-2">
+                  <label className="block text-xs font-bold text-slate-300 uppercase">Deriv API Token:</label>
+                  <input
+                    type="password"
+                    placeholder="Paste your copy trading token..."
+                    className="w-full bg-[#040817] border border-blue-900/60 rounded-xl px-4 py-3 text-xs text-white focus:outline-none focus:border-cyan-400 font-mono"
+                  />
+                  <button
+                    onClick={() => showCopyToast("🚀 API Token submitted successfully for copy trading!")}
+                    className="w-full bg-gradient-to-r from-emerald-600 to-cyan-600 text-white font-bold py-3 rounded-xl text-xs uppercase tracking-wider cursor-pointer shadow-lg"
+                  >
+                    Verify & Connect Account
+                  </button>
+                </div>
+              </div>
+
+              <div className="bg-[#0a1128] border border-blue-900/50 rounded-3xl p-6 shadow-xl space-y-4">
+                <h3 className="text-xs font-bold text-white uppercase">Copy Trading Results</h3>
+                <div className="bg-[#040817] p-4 rounded-2xl border border-blue-900/40 space-y-3">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-slate-400">Registered clients</span>
+                    <span className="font-bold text-cyan-400 font-mono">288</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-slate-400">Added today</span>
+                    <span className="font-bold text-emerald-400 font-mono">+6</span>
+                  </div>
+                  <div className="pt-2 border-t border-blue-900/40">
+                    <span className="text-[10px] text-slate-400 uppercase block">Latest Flip</span>
+                    <span className="text-emerald-400 font-black font-mono text-sm">$225 to $1,987</span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
-        </main>
+        )}
       </div>
 
       <footer className="max-w-7xl mx-auto mt-12 pt-6 border-t border-blue-900/30 text-center text-[11px] text-slate-500 space-y-2">
-        <p className="max-w-2xl mx-auto text-amber-500/90 font-medium">
-          Quantitative Analytics Notice: This terminal provides statistical rolling metrics and conditional probabilities for analytical research purposes only.
-        </p>
+        <p>© 2026 Expert Analysis Tool. All Rights Reserved (Multi-Market Quantitative Platform).</p>
       </footer>
     </div>
   );

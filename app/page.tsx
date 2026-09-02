@@ -193,7 +193,7 @@ export default function LizyTradeEnterprise() {
     return null;
   };
 
-  // Injini Kuu ya Uchambuzi (Bila Nested SetStates)
+  // Injini Kuu ya Uchambuzi
   const processIncomingTick = useCallback((lastD: number, newPriceStr?: string) => {
     lastTickTimeRef.current = Date.now();
 
@@ -302,7 +302,7 @@ export default function LizyTradeEnterprise() {
     });
   }, [selectedStrategy]);
 
-  // Live WebSocket Connection + Kazi ya FailSafe (Kuzuia kuganda kwa 100%)
+  // Live WebSocket Connection + FailSafe Pulse
   useEffect(() => {
     let isMounted = true;
     let ws: WebSocket | null = null;
@@ -346,7 +346,6 @@ export default function LizyTradeEnterprise() {
 
     connectWebSocket();
 
-    // Heartbeat Pulse: Ikiwa seva ya Deriv ikichelewa kutuma tick, mfumo unajisukuma wenyewe ili dashibodi isigande kamwe!
     const livePulse = setInterval(() => {
       const timeSinceLast = Date.now() - lastTickTimeRef.current;
       if (timeSinceLast >= 1200) {
@@ -362,7 +361,7 @@ export default function LizyTradeEnterprise() {
     };
   }, [symbol, processIncomingTick]);
 
-  // Countdown Timer ya Sekunde 10
+  // Countdown Timer
   useEffect(() => {
     const timerInterval = setInterval(() => {
       setTimerCount((prev) => {
@@ -377,7 +376,7 @@ export default function LizyTradeEnterprise() {
     return () => clearInterval(timerInterval);
   }, [playSignalAlertSound]);
 
-  // Upakiaji wa Watumiaji kutoka Supabase
+  // Supabase Load
   useEffect(() => {
     const loadUsers = async () => {
       try {
@@ -416,7 +415,7 @@ export default function LizyTradeEnterprise() {
         </div>
       )}
 
-      {/* Header with Dynamic Trade Mode / Launch Bot Routing */}
+      {/* Header */}
       <header className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between pb-5 border-b border-blue-900/40 gap-4">
         <div className="flex items-center gap-3">
           <div className="p-3 bg-gradient-to-br from-blue-600/30 to-cyan-500/20 border border-cyan-500/40 rounded-2xl text-cyan-400 shadow-lg shadow-cyan-500/10">
@@ -497,7 +496,7 @@ export default function LizyTradeEnterprise() {
       {/* Main Content Area */}
       <div className={`max-w-7xl mx-auto mt-6 transition-all duration-300 ${isSplitView ? "grid grid-cols-1 xl:grid-cols-2 gap-6" : ""}`}>
 
-        {/* Left Side: LizyTrade Signals & Market Analysis Engine */}
+        {/* Left Side: LizyTrade Signals */}
         <div className={`space-y-6 ${isSplitView ? "" : "grid grid-cols-1 lg:grid-cols-3 gap-6 space-y-0"}`}>
 
           {/* Controls Box */}
@@ -885,7 +884,7 @@ export default function LizyTradeEnterprise() {
           </div>
         </div>
 
-        {/* Right Side: Dynamic Embedded Terminal (lizytrade.site kwa Admin au bot.deriv.com kwa User) */}
+        {/* Right Side: Safe Split View Terminal (Weka iFrame kwa User na Side Card ya lizytrade.site kwa Admin) */}
         {isSplitView && (
           <div className="bg-[#0a1128] border border-blue-900/50 rounded-3xl p-4 shadow-2xl flex flex-col h-[850px] animate-in fade-in duration-300">
             <div className="flex items-center justify-between pb-3 border-b border-blue-900/40 px-2">
@@ -915,14 +914,37 @@ export default function LizyTradeEnterprise() {
               </div>
             </div>
 
-            <div className="flex-1 w-full rounded-2xl overflow-hidden mt-3 border border-blue-900/30 bg-white">
-              <iframe
-                src={botTerminalUrl}
-                className="w-full h-full border-0"
-                title={botTerminalLabel}
-                allow="clipboard-read; clipboard-write"
-              />
-            </div>
+            {isCurrentUserAdmin ? (
+              <div className="flex-1 w-full rounded-2xl mt-3 border border-blue-900/40 bg-[#040817] flex flex-col items-center justify-center p-6 text-center space-y-4">
+                <div className="p-4 bg-blue-600/20 border border-blue-500/40 rounded-2xl text-cyan-400">
+                  <Zap className="w-8 h-8 mx-auto" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="text-sm font-black text-white uppercase">LizyTrade Private Bot Station</h3>
+                  <p className="text-xs text-slate-400 max-w-sm">
+                    Ili kulinda usalama na token zako za biashara, kivinjari kinazuia kupakia tovuti yako ndani ya Iframe. Bofya kitufe hapa chini ili kufungua <code>lizytrade.site</code> upande wa pembeni.
+                  </p>
+                </div>
+                <a
+                  href="https://lizytrade.site"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white text-xs font-bold px-6 py-3.5 rounded-xl flex items-center gap-2 shadow-lg shadow-cyan-500/20 cursor-pointer"
+                >
+                  <span>Fungua lizytrade.site Kwenye Dirisha Jipya</span>
+                  <ExternalLink className="w-4 h-4" />
+                </a>
+              </div>
+            ) : (
+              <div className="flex-1 w-full rounded-2xl overflow-hidden mt-3 border border-blue-900/30 bg-white">
+                <iframe
+                  src="https://bot.deriv.com"
+                  className="w-full h-full border-0"
+                  title="Deriv Bot Terminal"
+                  allow="clipboard-read; clipboard-write"
+                />
+              </div>
+            )}
           </div>
         )}
 
